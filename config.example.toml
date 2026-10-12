@@ -1,0 +1,33 @@
+# Smart-Claude-Router config.
+#
+# Copy to ~/.config/smart-claude-router/config.toml (or $XDG_CONFIG_HOME/...) and change what
+# you need. Every key is optional: anything you leave out keeps the value shown here, and with
+# no file at all the proxy uses exactly these values.
+
+# Address the proxy listens on. Point Claude Code at it with
+#   ANTHROPIC_BASE_URL=http://127.0.0.1:8899 claude
+# Keep it on 127.0.0.1: requests carry your Claude login.
+listen = "127.0.0.1:8899"
+
+# Where requests are forwarded.
+upstream = "https://api.anthropic.com"
+
+# Tier used when routing has no better answer: "low", "medium" or "high".
+# "high" matches what Claude Code uses by default, so nothing changes until you lower it.
+default_tier = "high"
+
+# The models the router chooses between (routing arrives in v0.2.0).
+# effort: "low", "medium", "high", "xhigh" or "max".
+# A tier you write here needs both model and effort; tiers you leave out keep these values.
+
+[tiers.low]
+model = "claude-haiku-5-5"
+effort = "medium"
+
+[tiers.medium]
+model = "claude-sonnet-5-5"
+effort = "high"
+
+[tiers.high]
+model = "claude-opus-5-5"
+effort = "xhigh"

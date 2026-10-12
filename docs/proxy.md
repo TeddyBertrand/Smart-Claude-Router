@@ -77,8 +77,9 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8899 claude
 To stop using it, start Claude Code without `ANTHROPIC_BASE_URL`. Nothing else needs to be
 undone.
 
-The address (`127.0.0.1:8899`) is fixed for now and can only be reached from your own machine.
-A config file to change it is planned (#9).
+The proxy listens on `127.0.0.1:8899`, which can only be reached from your own machine. You can
+change the address in the config file (see `docs/config.md`); Claude Code's
+`ANTHROPIC_BASE_URL` must then use the same one.
 
 ## What comes next
 
