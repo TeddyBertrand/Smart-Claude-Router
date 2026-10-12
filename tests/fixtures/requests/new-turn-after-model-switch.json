@@ -1,0 +1,405 @@
+{
+  "_about": "Claude Code 2.1.296 request captured through a logging proxy (issue #6). Redacted: strings are <str:N> (original length), ids masked, tool schemas and safeguards context omitted. See docs/spike-request-shape.md.",
+  "expect": {
+    "kind": "user_turn",
+    "turn": "new"
+  },
+  "method": "POST",
+  "path": "/v1/messages",
+  "query": {
+    "beta": "true"
+  },
+  "headers": {
+    "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,claude-code-20250219,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,inline-tools-2026-09-15,advisor-tool-2026-03-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,thinking-display-updates-2026-08-18,afk-mode-2026-01-31,extended-cache-ttl-2025-04-11",
+    "anthropic-version": "2023-06-01",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.296 (external, cli)",
+    "x-app": "cli",
+    "x-claude-code-session-id": "<uuid>"
+  },
+  "body": {
+    "model": "claude-haiku-5-5",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:565>"
+          },
+          {
+            "type": "text",
+            "text": "<str:580>"
+          },
+          {
+            "type": "text",
+            "text": "<str:21>"
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "<str:30393>",
+        "output_config": {
+          "effort": "xhigh"
+        }
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "<str:30>",
+            "name": "Read",
+            "input": {
+              "file_path": "<str:126>"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "<str:30>",
+            "type": "tool_result",
+            "content": "<str:25>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:50>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "<str:41>"
+      },
+      {
+        "role": "system",
+        "content": "<str:163>"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:498>",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:581>"
+          },
+          {
+            "type": "text",
+            "text": "<str:30>"
+          },
+          {
+            "type": "text",
+            "text": "<str:218>"
+          },
+          {
+            "type": "text",
+            "text": "<str:131>"
+          },
+          {
+            "type": "text",
+            "text": "<str:113>"
+          },
+          {
+            "type": "text",
+            "text": "<str:6>"
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:291>",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "output_config": {
+          "effort": "medium"
+        }
+      }
+    ],
+    "system": [
+      {
+        "type": "text",
+        "text": "<str:70>"
+      },
+      {
+        "type": "text",
+        "text": "<str:57>",
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      },
+      {
+        "type": "text",
+        "text": "<str:6318>",
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    ],
+    "tools": [
+      {
+        "name": "Agent",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Artifact",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ArtifactComments",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ArtifactData",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "AskUserQuestion",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Bash",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronCreate",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronDelete",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronList",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "DesignSync",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Edit",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "EndConversation",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "EnterPlanMode",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "EnterWorktree",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ExitPlanMode",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ExitWorktree",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ListAgents",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Monitor",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "NotebookEdit",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "PushNotification",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Read",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "RemoteTrigger",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ReportFindings",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ScheduleWakeup",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "SendFeedback",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "SendMessage",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Skill",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "TaskStop",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "WebFetch",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "WebSearch",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Write",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      }
+    ],
+    "metadata": {
+      "user_id": "{\"device_id\":\"<hex:64>\",\"account_uuid\":\"<uuid>\",\"session_id\":\"<uuid>\"}"
+    },
+    "max_tokens": 128000,
+    "thinking": {
+      "type": "adaptive",
+      "display": "updates"
+    },
+    "context_management": {
+      "edits": [
+        {
+          "type": "clear_thinking_20251015",
+          "keep": "all"
+        }
+      ]
+    },
+    "safeguards": [
+      {
+        "type": "dangerous_tool_use",
+        "classifier_context": "<omitted>"
+      }
+    ],
+    "output_config": {
+      "effort": "medium"
+    },
+    "stream": true
+  }
+}
