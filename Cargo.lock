@@ -1206,6 +1206,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "futures-core",
+ "futures-util",
  "reqwest",
  "tokio",
  "tracing",
