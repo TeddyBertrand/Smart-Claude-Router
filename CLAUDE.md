@@ -49,6 +49,10 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   upstream headers, requested `model` only if it looks like a model id). Never headers or bodies;
   `tests/logging.rs` enforces it at the most verbose CLI level.
 - `contrib/smart-claude-router.service`: example systemd user unit (restart on failure).
+- `contrib/claude-wrapper.bash`: bash `claude` function that sets `ANTHROPIC_BASE_URL` only when
+  the proxy accepts connections (`/dev/tcp`, bash-only); otherwise connects directly. With the
+  variable set and the proxy down, Claude Code retries silently for minutes, so this matters.
+  User setup lives in `docs/setup.md`; check shell changes with `nix-shell -p shellcheck`.
 
 ## Planned routing (from the roadmap issues)
 
