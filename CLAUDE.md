@@ -37,8 +37,13 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   that sees each forwarded chunk (still compressed) and one `StreamEnd`. `ClientGone` is detected
   in `Drop` of the wrapped body, which is also what cancels the upstream request. HEAD responses
   are never observed. Nothing in production installs a tap yet (#24 will).
-- `src/main.rs` is thin: listen `127.0.0.1:8899`, upstream `https://api.anthropic.com`,
-  hard-coded until config (#9). `src/lib.rs` exists so integration tests can drive the proxy.
+- `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
+  `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
+  Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed
+  but unused until routing (v0.2.0). `config.example.toml` must equal the defaults (unit test).
+- `src/main.rs` is thin: load config, bind `listen`, serve `Proxy::new(&upstream)`. The
+  `--config` flag comes with the `run` subcommand (#10). `src/lib.rs` exists so integration tests
+  can drive the proxy.
 
 ## Planned routing (from the roadmap issues)
 
