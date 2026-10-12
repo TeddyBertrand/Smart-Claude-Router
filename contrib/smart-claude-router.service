@@ -1,0 +1,25 @@
+# Example systemd user unit: starts the proxy at login and restarts it if it crashes.
+#
+# Install:
+#   cargo install --path .                  # puts the binary in ~/.cargo/bin
+#   mkdir -p ~/.config/systemd/user
+#   cp contrib/smart-claude-router.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now smart-claude-router
+#
+# Logs:    journalctl --user -u smart-claude-router -f
+# Remove:  systemctl --user disable --now smart-claude-router
+#          rm ~/.config/systemd/user/smart-claude-router.service
+
+[Unit]
+Description=Smart-Claude-Router proxy for Claude Code
+Documentation=https://github.com/TeddyBertrand/Smart-Claude-Router
+
+[Service]
+# Change the path if the binary is installed elsewhere.
+ExecStart=%h/.cargo/bin/smart-claude-router run
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
