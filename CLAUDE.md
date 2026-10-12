@@ -13,6 +13,14 @@ template placeholder. The roadmap lives in GitHub milestones v0.1.0–v0.4.0 (is
 each issue with a plain-language and a technical description. #6 (request-shape / subscription
 auth spike) gates everything else.
 
+## Feature docs
+
+Every user-facing feature gets a plain-language page in `docs/` (see `docs/proxy.md`), added in
+the same PR as the feature and updated whenever its behavior changes. Write it for someone who
+doesn't read the code: what it does, why it exists, what it never does, how to use it and turn
+it off, and what happens when something fails. Describe the real behavior in short, direct
+sentences. No analogies and no code internals.
+
 ## Planned architecture (from the roadmap issues)
 
 Request path: Claude Code → proxy (`axum`, catch-all passthrough to upstream via `reqwest`) →
