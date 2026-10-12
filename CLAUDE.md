@@ -8,10 +8,18 @@ Quota-saving router for Claude Code: a local HTTP proxy that Claude Code talks t
 `ANTHROPIC_BASE_URL`, which picks the Claude model and effort level per request (rules first,
 later a small local model via Ollama) and forwards to the Anthropic API.
 
-Status: bootstrapped from the `dev-templates` Rust template; `src/main.rs` is still the
-template placeholder. The roadmap lives in GitHub milestones v0.1.0–v0.4.0 (issues #6–#25),
-each issue with a plain-language and a technical description. #6 (request-shape / subscription
-auth spike) gates everything else.
+Status: v0.1.0 in progress. `src/proxy.rs` is a transparent passthrough (#7); no routing yet.
+The roadmap lives in GitHub milestones v0.1.0–v0.4.0 (issues #6–#25). Before touching request
+handling, read `docs/spike-request-shape.md` (#6: the real Claude Code request shape, captured
+with subscription auth); redacted request fixtures are in `tests/fixtures/requests/`.
+
+## Feature docs
+
+Every user-facing feature gets a plain-language page in `docs/` (see `docs/proxy.md`), added in
+the same PR as the feature and updated whenever its behavior changes. Write it for someone who
+doesn't read the code: what it does, why it exists, what it never does, how to use it and turn
+it off, and what happens when something fails. Describe the real behavior in short, direct
+sentences. No analogies and no code internals.
 
 ## Planned architecture (from the roadmap issues)
 

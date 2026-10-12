@@ -1,17 +1,18 @@
-fn main() {
-    println!("{}", greeting());
-}
+use anyhow::Context;
+use smart_claude_router::proxy::Proxy;
 
-fn greeting() -> &'static str {
-    "hello from Smart-Claude-Router"
-}
+/// Hard-coded until the config file lands (#9).
+const LISTEN: &str = "127.0.0.1:8899";
+const UPSTREAM: &str = "https://api.anthropic.com";
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
 
-    #[test]
-    fn greeting_is_not_empty() {
-        assert!(!greeting().is_empty());
-    }
+    let listener = tokio::net::TcpListener::bind(LISTEN)
+        .await
+        .with_context(|| format!("binding {LISTEN}"))?;
+    tracing::info!("proxying http://{LISTEN} -> {UPSTREAM}");
+    axum::serve(listener, Proxy::new(UPSTREAM)?.router()).await?;
+    Ok(())
 }
