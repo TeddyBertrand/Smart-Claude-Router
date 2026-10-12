@@ -1,0 +1,32 @@
+{
+  "_about": "Claude Code 2.1.296 request captured through a logging proxy (issue #6). Redacted: strings are <str:N> (original length), ids masked, tool schemas and safeguards context omitted. See docs/spike-request-shape.md.",
+  "expect": {
+    "kind": "background_quota_probe"
+  },
+  "method": "POST",
+  "path": "/v1/messages",
+  "query": {
+    "beta": "true"
+  },
+  "headers": {
+    "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07",
+    "anthropic-version": "2023-06-01",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.296 (external, cli)",
+    "x-app": "cli",
+    "x-claude-code-session-id": "<uuid>"
+  },
+  "body": {
+    "model": "claude-opus-5-5",
+    "max_tokens": 1,
+    "messages": [
+      {
+        "role": "user",
+        "content": "<ident:5>"
+      }
+    ],
+    "metadata": {
+      "user_id": "{\"device_id\":\"<hex:64>\",\"account_uuid\":\"<uuid>\",\"session_id\":\"<uuid>\"}"
+    }
+  }
+}
