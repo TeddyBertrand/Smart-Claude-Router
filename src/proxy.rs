@@ -6,8 +6,14 @@
 //! bodies stream back chunk by chunk, still compressed: reqwest is built without its
 //! decompression features, so gzip-encoded SSE passes through byte for byte. When the client
 //! disconnects, the response body is dropped, which drops the upstream request with it.
+//!
+//! Each request is logged once at `info`: method, path (never the query), status, time until the
+//! upstream answered, and the requested model. Headers and bodies are never logged.
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use axum::{
     body::{to_bytes, Body},
@@ -55,13 +61,19 @@ impl Proxy {
         Router::new().fallback(forward).with_state(self)
     }
 
-    async fn forward(&self, req: Request) -> Result<Response, ForwardError> {
+    /// `model` is filled with the requested model, if the body names one, for the request log.
+    async fn forward(
+        &self,
+        req: Request,
+        model: &mut Option<String>,
+    ) -> Result<Response, ForwardError> {
         let (parts, body) = req.into_parts();
         let path_and_query = parts.uri.path_and_query().map_or("/", |pq| pq.as_str());
         let url = format!("{}{}", self.upstream, path_and_query);
         let body = to_bytes(body, MAX_REQUEST_BODY)
             .await
             .map_err(|_| ForwardError::Body)?;
+        *model = requested_model(&body);
 
         let mut request = self
             .client
@@ -99,10 +111,39 @@ impl Proxy {
 }
 
 async fn forward(State(proxy): State<Proxy>, req: Request) -> Response {
-    proxy
-        .forward(req)
+    let started = Instant::now();
+    let method = req.method().clone();
+    let path = req.uri().path().to_owned();
+    let mut model = None;
+    let response = proxy
+        .forward(req, &mut model)
         .await
-        .unwrap_or_else(IntoResponse::into_response)
+        .unwrap_or_else(IntoResponse::into_response);
+    tracing::info!(
+        %method,
+        %path,
+        status = response.status().as_u16(),
+        ms = started.elapsed().as_millis() as u64,
+        model = %model.as_deref().unwrap_or("-"),
+        "request"
+    );
+    response
+}
+
+/// The top-level `model` of a JSON body, if it looks like a model id. Anything else (no JSON,
+/// no `model`, odd characters) gives `None`, so the log never carries arbitrary body text.
+fn requested_model(body: &[u8]) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Peek {
+        model: Option<String>,
+    }
+    let model = serde_json::from_slice::<Peek>(body).ok()?.model?;
+    let plausible = !model.is_empty()
+        && model.len() <= 100
+        && model
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '@'));
+    plausible.then_some(model)
 }
 
 enum ForwardError {
@@ -185,5 +226,18 @@ mod tests {
         let names: Vec<_> = out.keys().map(HeaderName::as_str).collect();
         assert_eq!(names, ["authorization", "anthropic-beta", "x-multi"]);
         assert_eq!(out.get_all("x-multi").iter().count(), 2);
+    }
+
+    #[test]
+    fn requested_model_only_accepts_model_ids() {
+        let model = |body: &[u8]| requested_model(body);
+        assert_eq!(
+            model(br#"{"model":"claude-opus-5-5","messages":[]}"#).as_deref(),
+            Some("claude-opus-5-5")
+        );
+        assert_eq!(model(b""), None);
+        assert_eq!(model(b"not json"), None);
+        assert_eq!(model(br#"{"messages":[]}"#), None);
+        assert_eq!(model(br#"{"model":"x\nFAKE LOG LINE"}"#), None);
     }
 }

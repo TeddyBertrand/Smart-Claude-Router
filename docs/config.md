@@ -69,6 +69,7 @@ Misspelled settings are caught the same way, so a typo never gets silently ignor
 
 Delete or rename the file. The proxy goes back to the defaults the next time it starts.
 
-## Not yet available
+## Using another file
 
-Choosing a different file path when starting the proxy comes with the `run` command (#10).
+Start the proxy with `--config <PATH>` to use a different file (see `docs/run.md`). That file
+must exist.

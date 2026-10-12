@@ -41,9 +41,14 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed
   but unused until routing (v0.2.0). `config.example.toml` must equal the defaults (unit test).
-- `src/main.rs` is thin: load config, bind `listen`, serve `Proxy::new(&upstream)`. The
-  `--config` flag comes with the `run` subcommand (#10). `src/lib.rs` exists so integration tests
-  can drive the proxy.
+- `src/main.rs`: clap CLI, `run [--config] [--listen] [--log-level]` (flags > config file >
+  defaults). Logs to stderr via `tracing` (our crate at the chosen level, deps at `warn`; RUST_LOG
+  only when `--log-level` is absent). Ctrl+C/SIGTERM → graceful shutdown with a 5 s grace. Port
+  in use → exit 1 with a hint. `src/lib.rs` exists so integration tests can drive the proxy.
+- Logging policy: one `info` line per request (`method`, `path` without query, `status`, `ms` to
+  upstream headers, requested `model` only if it looks like a model id). Never headers or bodies;
+  `tests/logging.rs` enforces it at the most verbose CLI level.
+- `contrib/smart-claude-router.service`: example systemd user unit (restart on failure).
 
 ## Planned routing (from the roadmap issues)
 
@@ -96,7 +101,7 @@ Integration tests (`tests/*.rs`) run the proxy against a mock axum upstream on a
 (`tests/common/mod.rs::serve`). Every helper in `tests/common/` must be used by every test file
 that declares `mod common;`, otherwise dead-code warnings fail the build.
 
-Real Claude Code through the proxy: `nix develop -c cargo run`, then in another terminal
+Real Claude Code through the proxy: `nix develop -c cargo run -- run`, then in another terminal
 `ANTHROPIC_BASE_URL=http://127.0.0.1:8899 claude`.
 
 Pre-commit hooks (rustfmt, clippy, reject Co-authored-by):
