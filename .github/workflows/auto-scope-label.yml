@@ -4,6 +4,9 @@ on:
   issues:
     types: [opened, edited]
 
+permissions:
+  issues: write
+
 jobs:
   scope-label:
     runs-on: ubuntu-latest
@@ -21,7 +24,8 @@ jobs:
             echo "no [Scope] prefix found in title, skipping"
             exit 0
           fi
-          label="scope:$(echo "$scope" | tr '[:upper:]' '[:lower:]')"
-          gh label create "$label" --repo "$REPO" --color BFD4F2 --force >/dev/null 2>&1 || true
+          label=$(echo "$scope" | tr '[:upper:]' '[:lower:]')
+          # No --force: an existing label (e.g. bug) must keep its color/description.
+          gh label create "$label" --repo "$REPO" --color BFD4F2 >/dev/null 2>&1 || true
           gh issue edit "$NUMBER" --repo "$REPO" --add-label "$label"
           echo "applied label '$label' to issue #$NUMBER"
