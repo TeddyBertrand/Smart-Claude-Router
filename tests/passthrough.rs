@@ -1,6 +1,8 @@
 //! Proxy against a mock upstream: what Claude Code sends must arrive unchanged, and what the
 //! upstream answers must come back unchanged.
 
+mod common;
+
 use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
@@ -13,6 +15,7 @@ use axum::{
     response::Response,
     Router,
 };
+use common::serve;
 use smart_claude_router::proxy::Proxy;
 use tokio::net::TcpListener;
 
@@ -56,13 +59,6 @@ async fn upstream_handler(State(seen): State<Shared>, req: Request) -> Response 
             .body(Body::from(OPAQUE_BODY)),
     }
     .unwrap()
-}
-
-async fn serve(router: Router) -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    addr
 }
 
 /// Starts mock upstream + proxy; returns (proxy base URL, upstream addr, what upstream saw).

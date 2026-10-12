@@ -4,17 +4,20 @@
 //! `/v1/messages` always carries `?beta=true`, see `docs/spike-request-shape.md`). Request bodies
 //! are buffered so `content-length` stays exact and later routing can rewrite the JSON. Response
 //! bodies stream back chunk by chunk, still compressed: reqwest is built without its
-//! decompression features, so gzip-encoded SSE passes through byte for byte.
+//! decompression features, so gzip-encoded SSE passes through byte for byte. When the client
+//! disconnects, the response body is dropped, which drops the upstream request with it.
 
 use std::{sync::Arc, time::Duration};
 
 use axum::{
     body::{to_bytes, Body},
     extract::{Request, State},
-    http::{header, HeaderMap, HeaderName, StatusCode},
+    http::{header, HeaderMap, HeaderName, Method, StatusCode},
     response::{IntoResponse, Response},
     Router,
 };
+
+use crate::stream::{Observed, ResponseInfo, Tap};
 
 /// Largest request body accepted. The Messages API itself rejects requests above 32 MB.
 const MAX_REQUEST_BODY: usize = 64 * 1024 * 1024;
@@ -23,6 +26,7 @@ const MAX_REQUEST_BODY: usize = 64 * 1024 * 1024;
 pub struct Proxy {
     client: reqwest::Client,
     upstream: Arc<str>,
+    tap: Option<Arc<dyn Tap>>,
 }
 
 impl Proxy {
@@ -37,7 +41,14 @@ impl Proxy {
         Ok(Self {
             client,
             upstream: upstream.trim_end_matches('/').into(),
+            tap: None,
         })
+    }
+
+    /// Lets `tap` observe every response body as it streams (see [`crate::stream`]).
+    pub fn with_tap(mut self, tap: Arc<dyn Tap>) -> Self {
+        self.tap = Some(tap);
+        self
     }
 
     pub fn router(self) -> Router {
@@ -54,7 +65,7 @@ impl Proxy {
 
         let mut request = self
             .client
-            .request(parts.method, url)
+            .request(parts.method.clone(), url)
             .headers(strip_hop_by_hop(&parts.headers));
         if !body.is_empty() {
             request = request.body(body);
@@ -63,7 +74,24 @@ impl Proxy {
 
         let status = upstream.status();
         let headers = strip_hop_by_hop(upstream.headers());
-        let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
+        let observer = self
+            .tap
+            .as_ref()
+            // A HEAD body is never polled, so it would always look like `ClientGone`.
+            .filter(|_| parts.method != Method::HEAD)
+            .and_then(|tap| {
+                tap.observe(&ResponseInfo {
+                    method: &parts.method,
+                    path: parts.uri.path(),
+                    status,
+                    headers: &headers,
+                })
+            });
+        let body = match observer {
+            Some(observer) => Body::from_stream(Observed::new(upstream.bytes_stream(), observer)),
+            None => Body::from_stream(upstream.bytes_stream()),
+        };
+        let mut response = Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
         Ok(response)
