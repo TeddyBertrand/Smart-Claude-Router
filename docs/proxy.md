@@ -40,6 +40,16 @@ without you noticing. Model and effort choices come in later versions.
 One message from you can produce several requests. For example, Claude reads a file, gets the
 result, then answers. Each of those goes through the proxy the same way.
 
+## Live answers and Esc
+
+The proxy never waits for a full answer before passing it on. Each piece Anthropic sends goes to
+Claude Code as soon as it reaches the proxy, so answers appear as fast as they do without the
+proxy.
+
+When you press Esc, Claude Code closes its connection to the proxy. The proxy then closes its
+connection to Anthropic right away, the same way Claude Code does when it talks to Anthropic
+directly. Anthropic stops working on an answer nobody is reading anymore.
+
 ## When something goes wrong
 
 - If the proxy can't reach Anthropic, Claude Code shows an error saying the upstream request
@@ -47,6 +57,8 @@ result, then answers. Each of those goes through the proxy the same way.
 - If a request is larger than 64 MiB, the proxy refuses it. Anthropic itself rejects requests
   above 32 MB, so this doesn't happen in normal use.
 - Any error Anthropic returns, such as a rate limit, reaches Claude Code unchanged.
+- If Anthropic's connection breaks in the middle of an answer, Claude Code sees the answer cut
+  off, the same as it would without the proxy.
 
 ## How to use it
 
