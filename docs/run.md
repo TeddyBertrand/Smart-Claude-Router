@@ -82,6 +82,5 @@ commands are at the top of that file. Logs then go to the journal:
 journalctl --user -u smart-claude-router -f
 ```
 
-Starting Claude Code with the proxy automatically is covered in the setup guide (#11). Until
-then, keep in mind that if `ANTHROPIC_BASE_URL` is set and the proxy is not running, Claude Code
-cannot connect.
+Making Claude Code use the proxy automatically, and what happens when the proxy is down, is
+covered in the [setup guide](setup.md).
