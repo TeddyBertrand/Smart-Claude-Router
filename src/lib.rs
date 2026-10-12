@@ -2,3 +2,4 @@
 //! the Claude model and effort per request. Today it is a transparent passthrough.
 
 pub mod proxy;
+pub mod stream;
