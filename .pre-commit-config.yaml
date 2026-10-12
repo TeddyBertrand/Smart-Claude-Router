@@ -1,0 +1,19 @@
+repos:
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: rustfmt
+        entry: cargo fmt --
+        language: system
+        types: [rust]
+      - id: clippy
+        name: clippy
+        entry: cargo clippy -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: reject-co-authored-by
+        name: reject Co-authored-by trailer
+        entry: '^[Cc]o-authored-by:'
+        language: pygrep
+        stages: [commit-msg]

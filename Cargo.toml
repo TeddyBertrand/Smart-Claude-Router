@@ -1,0 +1,14 @@
+[package]
+name = "smart-claude-router"
+version = "0.1.0"
+edition = "2021"
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
+
+[[bin]]
+name = "smart-claude-router"
+path = "src/main.rs"

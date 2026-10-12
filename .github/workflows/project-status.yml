@@ -1,0 +1,246 @@
+name: Project status sync
+
+on:
+  create:
+  pull_request:
+    types: [opened, closed]
+  issues:
+    types: [opened]
+
+jobs:
+  issue-opened:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to project board (Backlog)
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: PVT_kwHOCu3BUc4Bmvli
+          STATUS_FIELD_ID: PVTSSF_lAHOCu3BUc4BmvlizhlXV0Y
+          BACKLOG_OPTION_ID: fb67fca2
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+        run: |
+          set -euo pipefail
+
+          item_id=$(gh api graphql -f query='
+            mutation($projectId: ID!, $contentId: ID!) {
+              addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                item { id }
+              }
+            }' -f projectId="$PROJECT_ID" -f contentId="$ISSUE_NODE_ID" \
+            --jq '.data.addProjectV2ItemById.item.id')
+
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
+            }' -f projectId="$PROJECT_ID" -f itemId="$item_id" \
+               -f fieldId="$STATUS_FIELD_ID" -f optionId="$BACKLOG_OPTION_ID"
+
+          echo "issue added to project board, status -> Backlog"
+
+  branch-linked:
+    if: github.event_name == 'create' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move issue linked to this branch to In progress
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: PVT_kwHOCu3BUc4Bmvli
+          STATUS_FIELD_ID: PVTSSF_lAHOCu3BUc4BmvlizhlXV0Y
+          IN_PROGRESS_OPTION_ID: a1f3e3f3
+          BRANCH_NAME: ${{ github.event.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          issue_node_id=$(gh api graphql -f query='
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                issues(first: 100, states: OPEN) {
+                  nodes {
+                    id
+                    number
+                    linkedBranches(first: 10) { nodes { ref { name } } }
+                  }
+                }
+              }
+            }' -f owner="${REPO%%/*}" -f name="${REPO##*/}" \
+            --jq ".data.repository.issues.nodes[] | select(.linkedBranches.nodes[]?.ref.name==\"$BRANCH_NAME\") | .id" \
+            | head -n1)
+
+          if [ -z "$issue_node_id" ]; then
+            echo "no issue linked to branch '$BRANCH_NAME', skipping"
+            exit 0
+          fi
+
+          item_id=$(gh api graphql -f query='
+            query($projectId: ID!) {
+              node(id: $projectId) {
+                ... on ProjectV2 {
+                  items(first: 100) {
+                    nodes { id content { ... on Issue { id } } }
+                  }
+                }
+              }
+            }' -f projectId="$PROJECT_ID" \
+            --jq ".data.node.items.nodes[] | select(.content.id==\"$issue_node_id\") | .id")
+
+          if [ -z "$item_id" ]; then
+            echo "linked issue not found on project, skipping"
+            exit 0
+          fi
+
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
+            }' -f projectId="$PROJECT_ID" -f itemId="$item_id" \
+               -f fieldId="$STATUS_FIELD_ID" -f optionId="$IN_PROGRESS_OPTION_ID"
+
+          echo "issue moved to In progress (branch '$BRANCH_NAME' linked)"
+
+  pr-opened:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move linked issues to In review
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: PVT_kwHOCu3BUc4Bmvli
+          STATUS_FIELD_ID: PVTSSF_lAHOCu3BUc4BmvlizhlXV0Y
+          IN_REVIEW_OPTION_ID: 4879dccd
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          issue_numbers=$(gh api "repos/$REPO/pulls/$PR_NUMBER" \
+            --jq '.body' | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?) #[0-9]+' \
+            | grep -oE '[0-9]+' || true)
+
+          if [ -z "$issue_numbers" ]; then
+            echo "no linked issues found in PR body"
+            exit 0
+          fi
+
+          for n in $issue_numbers; do
+            issue_node_id=$(gh api "repos/$REPO/issues/$n" --jq '.node_id')
+
+            item_id=$(gh api graphql -f query='
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    items(first: 100) {
+                      nodes { id content { ... on Issue { id } } }
+                    }
+                  }
+                }
+              }' -f projectId="$PROJECT_ID" \
+              --jq ".data.node.items.nodes[] | select(.content.id==\"$issue_node_id\") | .id")
+
+            if [ -z "$item_id" ]; then
+              echo "issue #$n not found on project, skipping"
+              continue
+            fi
+
+            gh api graphql -f query='
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }' -f projectId="$PROJECT_ID" -f itemId="$item_id" \
+                 -f fieldId="$STATUS_FIELD_ID" -f optionId="$IN_REVIEW_OPTION_ID"
+
+            echo "issue #$n -> In review"
+          done
+
+  pr-merged:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move linked issues' project status
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: PVT_kwHOCu3BUc4Bmvli
+          STATUS_FIELD_ID: PVTSSF_lAHOCu3BUc4BmvlizhlXV0Y
+          ON_DEV_OPTION_ID: c9366947
+          ON_MAIN_OPTION_ID: d0f136b1
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          case "$BASE_REF" in
+            dev) TARGET_OPTION_ID="$ON_DEV_OPTION_ID" ;;
+            main) TARGET_OPTION_ID="$ON_MAIN_OPTION_ID" ;;
+            *) echo "base ref '$BASE_REF' not tracked, skipping"; exit 0 ;;
+          esac
+
+          issue_numbers=$(gh api "repos/$REPO/pulls/$PR_NUMBER" \
+            --jq '.body' | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?) #[0-9]+' \
+            | grep -oE '[0-9]+' || true)
+
+          if [ -z "$issue_numbers" ]; then
+            echo "no linked issues found in PR body"
+            exit 0
+          fi
+
+          for n in $issue_numbers; do
+            issue_node_id=$(gh api "repos/$REPO/issues/$n" --jq '.node_id')
+
+            item_id=$(gh api graphql -f query='
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    items(first: 100) {
+                      nodes { id content { ... on Issue { id } } }
+                    }
+                  }
+                }
+              }' -f projectId="$PROJECT_ID" \
+              --jq ".data.node.items.nodes[] | select(.content.id==\"$issue_node_id\") | .id")
+
+            if [ -z "$item_id" ]; then
+              echo "issue #$n not found on project, skipping"
+              continue
+            fi
+
+            gh api graphql -f query='
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }' -f projectId="$PROJECT_ID" -f itemId="$item_id" \
+                 -f fieldId="$STATUS_FIELD_ID" -f optionId="$TARGET_OPTION_ID"
+
+            echo "issue #$n -> $BASE_REF status"
+
+            if [ "$BASE_REF" = "dev" ]; then
+              gh issue close "$n" --repo "$REPO" --reason completed
+              echo "issue #$n closed (merged to dev)"
+            fi
+          done

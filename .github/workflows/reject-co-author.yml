@@ -1,0 +1,23 @@
+name: Reject Co-authored-by trailer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan PR commits for a Co-authored-by trailer
+        run: |
+          set -euo pipefail
+          if git log --format=%B "origin/${{ github.base_ref }}..HEAD" \
+              | grep -iE '^co-authored-by:'; then
+            echo "::error::Commit(s) contain a 'Co-authored-by' trailer, which is rejected in this repo."
+            exit 1
+          fi
+          echo "no Co-authored-by trailer found"

@@ -1,0 +1,27 @@
+name: Auto scope label
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  scope-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract and apply scope label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: ${{ github.event.issue.title }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          scope=$(echo "$TITLE" | grep -oP '^\[\K[^\]]+' || true)
+          if [ -z "$scope" ]; then
+            echo "no [Scope] prefix found in title, skipping"
+            exit 0
+          fi
+          label="scope:$(echo "$scope" | tr '[:upper:]' '[:lower:]')"
+          gh label create "$label" --repo "$REPO" --color BFD4F2 --force >/dev/null 2>&1 || true
+          gh issue edit "$NUMBER" --repo "$REPO" --add-label "$label"
+          echo "applied label '$label' to issue #$NUMBER"
