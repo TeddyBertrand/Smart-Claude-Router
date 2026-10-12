@@ -65,7 +65,7 @@ directly. Anthropic stops working on an answer nobody is reading anymore.
 Start the proxy:
 
 ```bash
-nix develop -c cargo run
+nix develop -c cargo run -- run
 ```
 
 Then, in another terminal:
