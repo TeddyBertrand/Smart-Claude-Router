@@ -1,0 +1,71 @@
+{
+  "_about": "Claude Code 2.1.296 request captured through a logging proxy (issue #6). Redacted: strings are <str:N> (original length), ids masked, tool schemas and safeguards context omitted. See docs/spike-request-shape.md.",
+  "expect": {
+    "kind": "background_title"
+  },
+  "method": "POST",
+  "path": "/v1/messages",
+  "query": {
+    "beta": "true"
+  },
+  "headers": {
+    "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,inline-tools-2026-09-15,advisor-tool-2026-03-01,effort-2025-11-24,structured-outputs-2025-12-15",
+    "anthropic-version": "2023-06-01",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.296 (external, cli)",
+    "x-app": "cli",
+    "x-claude-code-session-id": "<uuid>"
+  },
+  "body": {
+    "model": "claude-opus-5-5",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:222>"
+          }
+        ]
+      }
+    ],
+    "system": [
+      {
+        "type": "text",
+        "text": "<str:70>"
+      },
+      {
+        "type": "text",
+        "text": "<str:57>"
+      },
+      {
+        "type": "text",
+        "text": "<str:3059>"
+      }
+    ],
+    "tools": [],
+    "metadata": {
+      "user_id": "{\"device_id\":\"<hex:64>\",\"account_uuid\":\"<uuid>\",\"session_id\":\"<uuid>\"}"
+    },
+    "max_tokens": 128000,
+    "output_config": {
+      "effort": "medium",
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "<ident:5>"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "stream": true
+  }
+}

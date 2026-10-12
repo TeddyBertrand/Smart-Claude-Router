@@ -1,0 +1,321 @@
+{
+  "_about": "Claude Code 2.1.296 request captured through a logging proxy (issue #6). Redacted: strings are <str:N> (original length), ids masked, tool schemas and safeguards context omitted. See docs/spike-request-shape.md.",
+  "expect": {
+    "kind": "user_turn",
+    "turn": "continuation"
+  },
+  "method": "POST",
+  "path": "/v1/messages",
+  "query": {
+    "beta": "true"
+  },
+  "headers": {
+    "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,<tok:31>,<tok:31>,<tok:29>,<tok:31>,<tok:34>,<tok:27>,<tok:40>,inline-tools-2026-09-15,advisor-tool-2026-03-01,effort-2025-11-24,<tok:29>",
+    "anthropic-version": "2023-06-01",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.296 (external, sdk-cli)",
+    "x-app": "cli",
+    "x-claude-code-session-id": "<uuid>"
+  },
+  "body": {
+    "model": "claude-opus-5-5",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:565>"
+          },
+          {
+            "type": "text",
+            "text": "<str:580>"
+          },
+          {
+            "type": "text",
+            "text": "<str:145>"
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "<str:25169>",
+        "output_config": {
+          "effort": "xhigh"
+        }
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "<str:30>",
+            "name": "Agent",
+            "input": {
+              "description": "<str:31>",
+              "subagent_type": "<ident:15>",
+              "prompt": "<str:320>",
+              "run_in_background": false
+            },
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "<str:30>",
+            "type": "tool_result",
+            "content": [
+              {
+                "type": "text",
+                "text": "<str:850>"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<str:2016>",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ]
+      }
+    ],
+    "system": [
+      {
+        "type": "text",
+        "text": "<str:74>"
+      },
+      {
+        "type": "text",
+        "text": "<str:62>",
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      },
+      {
+        "type": "text",
+        "text": "<str:6059>",
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    ],
+    "tools": [
+      {
+        "name": "Agent",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Bash",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronCreate",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronDelete",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "CronList",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "DesignSync",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Edit",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "EnterWorktree",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ExitWorktree",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Glob",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Grep",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ListAgents",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Monitor",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "NotebookEdit",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "PushNotification",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Read",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "RemoteTrigger",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ReportFindings",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "ScheduleWakeup",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "SendMessage",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Skill",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "TaskStop",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "WaitForMcpServers",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "WebFetch",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "WebSearch",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "Write",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      },
+      {
+        "name": "mcp__<redacted>",
+        "input_schema": "<omitted>"
+      }
+    ],
+    "metadata": {
+      "user_id": "{\"device_id\":\"<hex:64>\",\"account_uuid\":\"<uuid>\",\"session_id\":\"<uuid>\"}"
+    },
+    "max_tokens": 128000,
+    "thinking": {
+      "type": "adaptive",
+      "display": "<ident:7>"
+    },
+    "context_management": {
+      "edits": [
+        {
+          "type": "clear_thinking_20251015",
+          "keep": "<ident:3>"
+        }
+      ]
+    },
+    "output_config": {
+      "effort": "xhigh"
+    },
+    "stream": true
+  }
+}
