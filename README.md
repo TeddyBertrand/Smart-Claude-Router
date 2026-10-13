@@ -35,6 +35,13 @@ INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=20
 
 To stop using it, close the proxy with Ctrl+C and start `claude` without `ANTHROPIC_BASE_URL`.
 
+## Prebuilt binaries
+
+Each tagged release has archives for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) on
+the [Releases page](https://github.com/TeddyBertrand/Smart-Claude-Router/releases). Download the
+archive for your machine, unpack it, and put `smart-claude-router` on your `PATH`. You don't need
+Rust for this.
+
 ## Documentation
 
 - [Setup guide](docs/setup.md): installing, starting automatically at login, troubleshooting,
