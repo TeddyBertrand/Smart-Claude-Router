@@ -28,6 +28,7 @@ pub struct Config {
     pub mode: Mode,
     pub tiers: Tiers,
     pub rules: Rules,
+    pub classifier: Classifier,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -47,6 +48,26 @@ pub struct Rules {
     pub enabled: bool,
     /// Tried top to bottom; the first one that matches decides.
     pub rule: Vec<Rule>,
+}
+
+/// What the classifier is shown and told. The backend settings come with the Ollama client.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Classifier {
+    /// Most characters of your message the classifier sees. Longer messages keep their start and
+    /// end.
+    pub max_chars: usize,
+    /// A file with your own classifier prompt, replacing the built-in one.
+    pub prompt_file: Option<PathBuf>,
+}
+
+impl Default for Classifier {
+    fn default() -> Self {
+        Self {
+            max_chars: 600,
+            prompt_file: None,
+        }
+    }
 }
 
 /// One rule. Every condition it lists has to hold; conditions it leaves out are not checked.
@@ -129,6 +150,7 @@ impl Default for Config {
             mode: Mode::Route,
             tiers: Tiers::default(),
             rules: Rules::default(),
+            classifier: Classifier::default(),
         }
     }
 }
@@ -206,6 +228,17 @@ impl Config {
             if tier.model.trim().is_empty() {
                 bail!("tiers.{name}.model must not be empty");
             }
+        }
+        if self.classifier.max_chars < 20 {
+            bail!("classifier.max_chars must be at least 20");
+        }
+        if self
+            .classifier
+            .prompt_file
+            .as_ref()
+            .is_some_and(|p| p.as_os_str().is_empty())
+        {
+            bail!("classifier.prompt_file must not be empty");
         }
         for (i, rule) in self.rules.rule.iter().enumerate() {
             let at = format!("rules.rule #{} ({:?})", i + 1, rule.name);
@@ -357,6 +390,23 @@ mod tests {
             rule("name = \"a\"\ntier = \"low\"\nmin_messages = 9\nmax_messages = 1")
                 .contains("min_messages is larger than max_messages")
         );
+    }
+
+    #[test]
+    fn classifier_settings_default_and_validate() {
+        let defaults = Config::default().classifier;
+        assert_eq!((defaults.max_chars, defaults.prompt_file), (600, None));
+        let config =
+            Config::from_toml("[classifier]\nmax_chars = 300\nprompt_file = \"/etc/prompt.md\"")
+                .unwrap();
+        assert_eq!(config.classifier.max_chars, 300);
+        assert_eq!(
+            config.classifier.prompt_file,
+            Some(PathBuf::from("/etc/prompt.md"))
+        );
+        assert!(err("[classifier]\nmax_chars = 5").contains("classifier.max_chars"));
+        assert!(err("[classifier]\nprompt_file = \"\"").contains("classifier.prompt_file"));
+        assert!(err("[classifier]\nmax_char = 50").contains("max_char"));
     }
 
     #[test]
