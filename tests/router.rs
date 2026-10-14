@@ -17,8 +17,8 @@ use smart_claude_router::{
     config::Effort,
     proxy::Proxy,
     router::{
-        BoxFuture, DecisionSource, PassthroughRouter, RequestView, Router as RouteDecider,
-        RoutingDecision,
+        background_kind, BackgroundKind, BoxFuture, DecisionSource, PassthroughRouter, RequestView,
+        Router as RouteDecider, RoutingDecision,
     },
 };
 use tokio::net::TcpListener;
@@ -261,4 +261,58 @@ async fn proxy_asks_the_router_only_for_messages_and_forwards_the_body_unchanged
     let received = received.lock().unwrap();
     assert_eq!(received[0], body.as_bytes());
     assert_eq!(received.len(), 4);
+}
+
+#[test]
+fn only_the_background_fixtures_are_background() {
+    for fixture in fixtures() {
+        let expected = match fixture.kind.as_str() {
+            "background_quota_probe" => Some(BackgroundKind::QuotaProbe),
+            "background_title" => Some(BackgroundKind::TitleGeneration),
+            _ => None,
+        };
+        assert_eq!(
+            background_kind(&view(&fixture)),
+            expected,
+            "{}",
+            fixture.name
+        );
+    }
+}
+
+#[tokio::test]
+async fn background_requests_skip_the_router_and_arrive_byte_identical() {
+    let received = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let sink = received.clone();
+    let upstream = serve(
+        Router::new().fallback(any(move |body: axum::body::Bytes| async move {
+            sink.lock().unwrap().push(body.to_vec());
+            "ok"
+        })),
+    )
+    .await;
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let proxy = Proxy::new(&format!("http://{upstream}"))
+        .unwrap()
+        .with_router(Arc::new(Recorder(asked.clone())));
+    let proxy_addr = serve(proxy.router()).await;
+
+    let background: Vec<_> = fixtures()
+        .into_iter()
+        .filter(|f| f.kind.starts_with("background_"))
+        .collect();
+    assert_eq!(background.len(), 2);
+    let client = reqwest::Client::new();
+    for fixture in &background {
+        client
+            .post(format!("http://{proxy_addr}/v1/messages?beta=true"))
+            .body(fixture.body.clone())
+            .send()
+            .await
+            .unwrap();
+    }
+
+    assert!(asked.lock().unwrap().is_empty());
+    let sent: Vec<_> = background.into_iter().map(|f| f.body).collect();
+    assert_eq!(*received.lock().unwrap(), sent);
 }

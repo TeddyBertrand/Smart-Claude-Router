@@ -24,7 +24,7 @@ use axum::{
 };
 
 use crate::{
-    router::{PassthroughRouter, RequestView, Router as RouteDecider},
+    router::{background_kind, PassthroughRouter, RequestView, Router as RouteDecider},
     stream::{Observed, ResponseInfo, Tap},
 };
 
@@ -88,14 +88,18 @@ impl Proxy {
         *model = requested_model(&body);
         if parts.method == Method::POST && parts.uri.path() == "/v1/messages" {
             if let Some(view) = RequestView::parse(&parts.headers, &body) {
-                let decision = self.router.decide(&view).await;
-                tracing::debug!(
-                    model = %decision.model,
-                    effort = ?decision.effort,
-                    source = ?decision.source,
-                    reason = %decision.reason,
-                    "routing decision"
-                );
+                if let Some(kind) = background_kind(&view) {
+                    tracing::debug!(kind = kind.as_str(), "background request, not routed");
+                } else {
+                    let decision = self.router.decide(&view).await;
+                    tracing::debug!(
+                        model = %decision.model,
+                        effort = ?decision.effort,
+                        source = ?decision.source,
+                        reason = %decision.reason,
+                        "routing decision"
+                    );
+                }
             }
         }
 

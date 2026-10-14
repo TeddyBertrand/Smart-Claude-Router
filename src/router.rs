@@ -50,6 +50,39 @@ pub enum DecisionSource {
     Classifier,
 }
 
+/// Internal requests Claude Code makes on its own, not on behalf of a user turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundKind {
+    /// `max_tokens: 1`, sent to read the quota headers.
+    QuotaProbe,
+    /// Structured output (`output_config.format`) that asks for a session title.
+    TitleGeneration,
+}
+
+impl BackgroundKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::QuotaProbe => "quota_probe",
+            Self::TitleGeneration => "title_generation",
+        }
+    }
+}
+
+/// Recognises the background requests found in `docs/spike-request-shape.md`. These must reach
+/// the upstream untouched, so the proxy does not route them.
+///
+/// Compaction is not listed: it has no reliable marker and looks like a continuation, which
+/// keeps the current model.
+pub fn background_kind(req: &RequestView) -> Option<BackgroundKind> {
+    if req.max_tokens == Some(1) {
+        Some(BackgroundKind::QuotaProbe)
+    } else if req.has_output_format {
+        Some(BackgroundKind::TitleGeneration)
+    } else {
+        None
+    }
+}
+
 /// Returns the requested model and effort unchanged. The default router.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PassthroughRouter;
