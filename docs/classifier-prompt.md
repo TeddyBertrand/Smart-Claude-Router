@@ -2,10 +2,10 @@
 
 ## What it is
 
-The classifier is a small AI model that will read each new message you send and say how hard the
+The classifier is a small AI model that reads each new message you send and says how hard the
 work is. This page describes what that model is told, what it is shown of your message, and what
-it must answer. The classifier itself (the Ollama client) is not part of the proxy yet. Nothing
-described here runs today, and no request is changed by it.
+it must answer. How it is run and what happens when it fails is on
+[the classifier router](classifier.md) page. It only runs when `router = "classifier"`.
 
 ## What the model is shown
 
@@ -57,7 +57,8 @@ message and a long prompt makes it slower. The current prompt is about 780.
 
 ## Settings
 
-In the `[classifier]` block of [the config file](config.md):
+In the `[classifier]` block of [the config file](config.md) (the other settings are on
+[the classifier router](classifier.md) page):
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -70,7 +71,7 @@ prompt. Restart the proxy after changing a setting or the file.
 
 ## What it never does
 
-- It never sends anything anywhere by itself. This part only builds text and reads answers.
+- It never sends anything by itself. This part only builds the text and reads the answer.
 - It never logs or stores your message.
 - It never accepts a partly valid answer.
 
@@ -81,8 +82,7 @@ misspelled setting stops the proxy at startup with a message naming the setting.
 
 ## Turning it off
 
-Delete the `[classifier]` block. The defaults are used, and until the classifier router exists
-they have no effect.
+Set `router = "rules"`. The prompt is then not used at all.
 
 ## For developers
 
