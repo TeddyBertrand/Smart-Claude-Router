@@ -87,6 +87,33 @@ fn startup_says_which_mode_it_runs_in() {
 
 #[cfg(unix)]
 #[test]
+fn startup_names_the_classifier_and_warns_when_it_is_not_local() {
+    let dir = std::env::temp_dir().join(format!("scr-cli-classifier-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, text: &str| {
+        let path = dir.join(name);
+        std::fs::write(&path, text).unwrap();
+        path.to_string_lossy().into_owned()
+    };
+
+    let local = write("local.toml", "router = \"classifier\"");
+    let out = run_and_stop("classifier-local", &["--config", &local]);
+    assert!(
+        out.contains("mode: route, classifier router (model qwen2.5:3b at http://127.0.0.1:11434"),
+        "{out}"
+    );
+    assert!(!out.contains("not on this machine"), "{out}");
+
+    let remote = write(
+        "remote.toml",
+        "router = \"classifier\"\n[classifier]\nurl = \"http://192.0.2.1:11434\"",
+    );
+    let out = run_and_stop("classifier-remote", &["--config", &remote]);
+    assert!(out.contains("not on this machine"), "{out}");
+}
+
+#[cfg(unix)]
+#[test]
 fn ctrl_c_stops_cleanly() {
     let addr = TcpListener::bind("127.0.0.1:0")
         .unwrap()
