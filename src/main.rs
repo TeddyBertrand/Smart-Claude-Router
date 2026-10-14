@@ -9,7 +9,11 @@ use std::{
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use smart_claude_router::{config::Config, proxy::Proxy, rules::RulesRouter};
+use smart_claude_router::{
+    config::{Config, Mode},
+    proxy::Proxy,
+    rules::RulesRouter,
+};
 use tokio::{net::TcpListener, sync::oneshot};
 use tracing_subscriber::EnvFilter;
 
@@ -38,6 +42,10 @@ struct RunArgs {
     /// Address to listen on, overriding the config file.
     #[arg(long, value_name = "IP:PORT")]
     listen: Option<SocketAddr>,
+    /// Dry run: log each routing decision but forward every request unchanged. Overrides
+    /// `mode` in the config file.
+    #[arg(long)]
+    dry_run: bool,
     /// How much to log. Without it, RUST_LOG is used if set, else `info`.
     #[arg(long, value_enum)]
     log_level: Option<LogLevel>,
@@ -66,6 +74,9 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     if let Some(listen) = args.listen {
         config.listen = listen;
     }
+    if args.dry_run {
+        config.mode = Mode::Observe;
+    }
     match &source {
         Some(path) => tracing::info!("config: {}", path.display()),
         None => tracing::info!("config: built-in defaults (no config file found)"),
@@ -82,12 +93,21 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     tracing::info!("proxying http://{} -> {}", config.listen, config.upstream);
 
     let (stop, stopped) = oneshot::channel::<()>();
-    let mut proxy = Proxy::new(&config.upstream)?;
+    let observe = config.mode == Mode::Observe;
+    let mut proxy = Proxy::new(&config.upstream)?.with_dry_run(observe);
     if config.rules.enabled {
-        tracing::info!("routing: rules ({} configured)", config.rules.rule.len());
         proxy = proxy.with_router(Arc::new(RulesRouter::new(&config)));
-    } else {
-        tracing::info!("routing: off, requests are forwarded unchanged");
+    }
+    match (observe, config.rules.enabled) {
+        (false, false) => tracing::info!("mode: route, but rules are off: requests are forwarded unchanged"),
+        (false, true) => tracing::info!("mode: route, rules router ({} rules)", config.rules.rule.len()),
+        (true, true) => tracing::info!(
+            "mode: observe (dry run), rules router ({} rules): decisions are logged, requests are forwarded unchanged",
+            config.rules.rule.len()
+        ),
+        (true, false) => tracing::warn!(
+            "mode: observe (dry run), but rules are off ([rules] enabled = false): there is nothing to observe"
+        ),
     }
     let server = axum::serve(listener, proxy.router()).with_graceful_shutdown(async {
         let _ = stopped.await;

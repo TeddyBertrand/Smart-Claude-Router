@@ -53,6 +53,38 @@ fn port_in_use_exits_with_a_clear_error() {
     assert!(stderr.contains("already running"), "{stderr}");
 }
 
+/// Starts `run` with `args`, waits until it listens, stops it and returns what it printed.
+#[cfg(unix)]
+fn run_and_stop(test: &str, args: &[&str]) -> String {
+    let addr = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    let child = run_cmd(addr, test).args(args).spawn().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while TcpStream::connect(addr).is_err() {
+        assert!(Instant::now() < deadline, "proxy never started listening");
+        thread::sleep(Duration::from_millis(50));
+    }
+    Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    let output = wait_with_timeout(child, Duration::from_secs(10));
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[cfg(unix)]
+#[test]
+fn startup_says_which_mode_it_runs_in() {
+    let route = run_and_stop("mode-route", &[]);
+    assert!(route.contains("mode: route, but rules are off"), "{route}");
+
+    let dry = run_and_stop("mode-dry", &["--dry-run"]);
+    assert!(dry.contains("mode: observe (dry run)"), "{dry}");
+    assert!(dry.contains("nothing to observe"), "{dry}");
+}
+
 #[cfg(unix)]
 #[test]
 fn ctrl_c_stops_cleanly() {
