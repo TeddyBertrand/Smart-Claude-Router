@@ -16,12 +16,16 @@ doesn't need more, so your subscription quota lasts longer.
 
 ## What it does today
 
-Nothing changes. The proxy passes every request to Anthropic exactly as Claude Code wrote it,
-and passes every answer back exactly as Anthropic wrote it. Answers still appear word by word
-as they are generated.
+By default, nothing changes. The proxy passes every request to Anthropic exactly as Claude Code
+wrote it, and passes every answer back exactly as Anthropic wrote it. Answers still appear word
+by word as they are generated.
 
-This first version exists to prove that the proxy can sit between Claude Code and Anthropic
-without you noticing. Model and effort choices come in later versions.
+If you turn on [the rules router](rules.md), the proxy changes the model and effort of the
+requests your rules match, and nothing else in them. [Dry run](dry-run.md) shows what it would
+change without changing anything. Answers are never altered.
+
+The proxy can sit between Claude Code and Anthropic without you noticing. That is what makes it
+safe to add model and effort choices on top.
 
 ## What it never does
 
@@ -84,9 +88,10 @@ change the address in the config file (see `docs/config.md`); Claude Code's
 ## What comes next
 
 - **v0.1.0:** passthrough, answers streamed live, config file, a `run` command, setup guide.
-- **v0.2.0:** the proxy picks the model and effort using simple rules you can read and edit.
-  The model only changes when you send a new message, never in the middle of Claude working on
-  one.
+- **v0.2.0 (this version):** the proxy picks the model and effort using simple rules you can
+  read and edit (see [the rules router](rules.md)), off until you turn it on. The model only
+  changes when you send a new message, never in the middle of Claude working on one. A dry-run
+  mode shows what it would choose without changing anything.
 - **v0.3.0:** a small AI model running on your machine makes that choice instead of fixed rules.
   If it is slow or fails, the rules decide.
 - **v0.4.0:** the proxy avoids switching models when that would cost more than it saves, moves
