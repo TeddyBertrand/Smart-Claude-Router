@@ -82,9 +82,15 @@ enabled = false
 #
 # url: where Ollama listens.
 # model: the Ollama model that grades messages. Pull it first: `ollama pull qwen2.5:3b`.
-# timeout_ms: longest wait for an answer. After that the default tier is used.
+# timeout_ms: longest wait for an answer. After that the fallback decides (see below).
 # keep_alive: how long Ollama keeps the model loaded after a call ("-1" = always), so a call
 # never waits for the model to load.
+# min_confidence: answers the model is less sure about than this (0 to 1) are not used.
+# failure_limit, cooldown_secs: after this many failures in a row the classifier is not called
+# for this many seconds, so a stopped Ollama does not add a wait to every message.
+#
+# The fallback, used whenever the classifier gives no usable answer: the rules router if
+# [rules] enabled = true, otherwise default_tier.
 # max_chars: most characters of your message the classifier sees. A longer message keeps its
 # start and its end, with the middle cut out (see docs/classifier-prompt.md).
 # prompt_file: path to your own classifier prompt, replacing the built-in one. Not set by default.
@@ -94,5 +100,8 @@ url = "http://127.0.0.1:11434"
 model = "qwen2.5:3b"
 timeout_ms = 500
 keep_alive = "30m"
+min_confidence = 0.5
+failure_limit = 3
+cooldown_secs = 30
 max_chars = 600
 # prompt_file = "/home/you/classifier-prompt.md"

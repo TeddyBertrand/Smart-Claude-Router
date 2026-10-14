@@ -105,10 +105,15 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
         RouterKind::Classifier => {
             let prompt = Prompt::load(&config.classifier)?;
             let summary = format!(
-                "classifier router (model {} at {}, prompt {})",
+                "classifier router (model {} at {}, prompt {}), fallback: {}",
                 config.classifier.model,
                 config.classifier.url,
-                prompt.version()
+                prompt.version(),
+                if config.rules.enabled {
+                    "rules router"
+                } else {
+                    "default tier"
+                }
             );
             if !is_local(&config.classifier.url) {
                 tracing::warn!(

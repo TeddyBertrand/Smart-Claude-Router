@@ -73,13 +73,17 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   client, `POST /api/chat`, `stream:false`, `format` = `output_schema()`, `keep_alive`, hard
   per-call timeout `timeout_ms`; `warm_up()` hits `/api/generate` with no prompt) and
   `ClassifierRouter` (`Router`, source `Classifier`). tier → model via `[tiers]`; effort =
-  `min(tier effort, classifier effort)`. Any `ClassifyError` (timeout, unreachable, status,
-  unreadable reply, invalid answer) returns the `default_tier` decision with reason
-  `classifier failed (<label>), default tier`; only `ClassifyError::label()` is logged, never
-  message or answer text. Config top-level `router = "rules" | "classifier"` (default `rules`;
-  `classifier` needs no `enabled` switch) plus `[classifier] url/model/timeout_ms/keep_alive`.
-  `main.rs` installs it, spawns the warm-up and warns when `url` is not loopback. #20 still has
-  to add rules fallback, confidence threshold, circuit breaker and a `fallback` source.
+  `min(tier effort, classifier effort)`. Config top-level `router = "rules" | "classifier"`
+  (default `rules`; `classifier` needs no `enabled` switch) plus `[classifier]
+  url/model/timeout_ms/keep_alive`. `main.rs` installs it, spawns the warm-up and warns when
+  `url` is not loopback.
+- Classifier fallback (#20): no usable answer (any `ClassifyError`, confidence below
+  `min_confidence`, or breaker open) → `fallback()` asks `RulesRouter` if `rules.enabled`, else
+  `default_tier`; source `DecisionSource::Fallback`, reason `classifier fallback (<cause>):
+  <inner reason>`. Only `ClassifyError::label()` is logged, never message or answer text.
+  `src/breaker.rs` `Breaker` (time passed in; `failure_limit` failures in a row → refuse for
+  `cooldown_secs`, then one probe per `timeout_ms` window, no in-flight flag). Low confidence is
+  a success for the breaker. `Config` and `Classifier` are no longer `Eq` (`min_confidence`).
 - `src/classifier.rs` (#19): `Prompt` (`builtin()` = `prompts/classifier-v1.md`
   via `include_str!`, or `prompt_file`; `PROMPT_VERSION`, 900-token budget tested),
   `condense(&RequestView, max_chars)` (deterministic model input: message as a JSON string cut

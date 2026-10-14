@@ -24,6 +24,7 @@ use smart_claude_router::{
     config::Config,
     ollama::{ClassifyError, OllamaClient},
     proxy::Proxy,
+    router::{DecisionSource, RequestView},
 };
 
 const TIMEOUT_MS: u64 = 300;
@@ -72,11 +73,32 @@ fn grade(tier: &str, effort: &str) -> (StatusCode, String) {
     chat(&json!({ "tier": tier, "effort": effort, "confidence": 0.9 }).to_string())
 }
 
-/// A proxy using the classifier router against `ollama_addr`, in front of a mock Anthropic.
-/// Returns a function that posts one `/v1/messages` request and gives back the JSON body the
-/// upstream received.
+/// A classifier router against `ollama_addr`. `classifier_extra` is added to the `[classifier]`
+/// table and `rest` after it (for example a `[rules]` table).
+fn router_with(ollama_addr: SocketAddr, classifier_extra: &str, rest: &str) -> ClassifierRouter {
+    let config = Config::from_toml(&format!(
+        "router = \"classifier\"\n[classifier]\nurl = \"http://{ollama_addr}\"\ntimeout_ms = {TIMEOUT_MS}\n{classifier_extra}\n{rest}"
+    ))
+    .unwrap();
+    let client = OllamaClient::new(&config.classifier).unwrap();
+    ClassifierRouter::new(&config, client, Prompt::builtin())
+}
+
+/// The summary of a new user turn, as the proxy would give it to the router.
+fn view(text: &str) -> RequestView {
+    RequestView::parse(&HeaderMap::new(), user_turn(text).to_string().as_bytes()).unwrap()
+}
+
 async fn setup(
     ollama_addr: SocketAddr,
+) -> impl Fn(Value, &'static str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value>>> {
+    setup_with(router_with(ollama_addr, "", "")).await
+}
+
+/// A proxy using `router`, in front of a mock Anthropic. Returns a function that posts one
+/// `/v1/messages` request and gives back the JSON body the upstream received.
+async fn setup_with(
+    router: ClassifierRouter,
 ) -> impl Fn(Value, &'static str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value>>> {
     let received = Arc::new(Mutex::new(None::<Vec<u8>>));
     let sink = received.clone();
@@ -87,12 +109,6 @@ async fn setup(
         },
     )))
     .await;
-    let config = Config::from_toml(&format!(
-        "router = \"classifier\"\n[classifier]\nurl = \"http://{ollama_addr}\"\ntimeout_ms = {TIMEOUT_MS}"
-    ))
-    .unwrap();
-    let client = OllamaClient::new(&config.classifier).unwrap();
-    let router = ClassifierRouter::new(&config, client, Prompt::builtin());
     let proxy = Proxy::new(&format!("http://{upstream}"))
         .unwrap()
         .with_router(Arc::new(router));
@@ -301,4 +317,163 @@ async fn warm_up_loads_the_model_and_reports_failures() {
         Prompt::builtin(),
     );
     assert_eq!(router.warm_up().await, Err(ClassifyError::Status(404)));
+}
+
+const RULES: &str = r#"
+[rules]
+enabled = true
+
+[[rules.rule]]
+name = "typos"
+tier = "low"
+keywords = ["typo"]
+"#;
+
+#[tokio::test]
+async fn the_rules_decide_when_the_classifier_fails_and_they_are_enabled() {
+    let (addr, _) = ollama(|| async { (StatusCode::NOT_FOUND, String::new()) }).await;
+    let router = router_with(addr, "", RULES);
+
+    let matched = router.route(&view("fix the typo")).await;
+    assert_eq!(matched.model, HAIKU);
+    assert_eq!(matched.source, DecisionSource::Fallback);
+    assert_eq!(
+        matched.reason,
+        "classifier fallback (ollama status 404): rule typos"
+    );
+
+    let unmatched = router.route(&view("redesign everything")).await;
+    assert_eq!(unmatched.model, OPUS);
+    assert_eq!(unmatched.source, DecisionSource::Fallback);
+    assert_eq!(
+        unmatched.reason,
+        "classifier fallback (ollama status 404): no rule matched, default tier"
+    );
+}
+
+#[tokio::test]
+async fn the_default_tier_decides_when_the_rules_are_off() {
+    let (addr, _) = ollama(|| async { (StatusCode::NOT_FOUND, String::new()) }).await;
+    let decision = router_with(addr, "", "").route(&view("fix the typo")).await;
+
+    assert_eq!(decision.model, OPUS);
+    assert_eq!(decision.source, DecisionSource::Fallback);
+    assert_eq!(
+        decision.reason,
+        "classifier fallback (ollama status 404): default tier"
+    );
+}
+
+#[tokio::test]
+async fn an_unsure_answer_is_not_used() {
+    let unsure = |confidence: f64| {
+        let content = json!({ "tier": "low", "effort": "low", "confidence": confidence });
+        move || {
+            let content = content.to_string();
+            async move { chat(&content) }
+        }
+    };
+
+    let (addr, _) = ollama(unsure(0.3)).await;
+    let decision = router_with(addr, "", RULES).route(&view("redesign")).await;
+    assert_eq!(decision.source, DecisionSource::Fallback);
+    assert_eq!(decision.model, OPUS);
+    assert_eq!(
+        decision.reason,
+        "classifier fallback (confidence 0.30 below 0.50): no rule matched, default tier"
+    );
+
+    // Exactly at the threshold is accepted, and the threshold can be changed.
+    let (addr, _) = ollama(unsure(0.5)).await;
+    let decision = router_with(addr, "", "").route(&view("redesign")).await;
+    assert_eq!(decision.source, DecisionSource::Classifier);
+    assert_eq!(decision.model, HAIKU);
+
+    let (addr, _) = ollama(unsure(0.5)).await;
+    let decision = router_with(addr, "min_confidence = 0.8", "")
+        .route(&view("redesign"))
+        .await;
+    assert_eq!(decision.source, DecisionSource::Fallback);
+}
+
+#[tokio::test]
+async fn repeated_failures_pause_the_classifier_and_it_comes_back() {
+    let healthy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = healthy.clone();
+    let (addr, seen) = ollama(move || {
+        let up = flag.load(Ordering::SeqCst);
+        async move {
+            if up {
+                grade("low", "low")
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+            }
+        }
+    })
+    .await;
+    let router = router_with(addr, "failure_limit = 2\ncooldown_secs = 1", "");
+    let calls = || seen.calls.load(Ordering::SeqCst);
+
+    for _ in 0..2 {
+        let decision = router.route(&view("fix it")).await;
+        assert_eq!(
+            decision.reason,
+            "classifier fallback (ollama status 500): default tier"
+        );
+    }
+    assert_eq!(calls(), 2);
+
+    // Paused: Ollama is not called and the answer is immediate.
+    let started = Instant::now();
+    let decision = router.route(&view("fix it")).await;
+    assert_eq!(calls(), 2);
+    assert_eq!(
+        decision.reason,
+        "classifier fallback (paused after repeated failures): default tier"
+    );
+    assert!(started.elapsed() < Duration::from_millis(50));
+
+    // After the cooldown the next call checks whether Ollama is back.
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    healthy.store(true, Ordering::SeqCst);
+    let decision = router.route(&view("fix it")).await;
+    assert_eq!(calls(), 3);
+    assert_eq!(decision.source, DecisionSource::Classifier);
+
+    router.route(&view("fix it")).await;
+    assert_eq!(calls(), 4);
+}
+
+#[tokio::test]
+async fn a_failed_check_keeps_the_classifier_paused() {
+    let (addr, seen) =
+        ollama(|| async { (StatusCode::INTERNAL_SERVER_ERROR, String::new()) }).await;
+    let router = router_with(addr, "failure_limit = 1\ncooldown_secs = 1", "");
+
+    router.route(&view("fix it")).await;
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    router.route(&view("fix it")).await;
+    assert_eq!(seen.calls.load(Ordering::SeqCst), 2);
+
+    let decision = router.route(&view("fix it")).await;
+    assert_eq!(seen.calls.load(Ordering::SeqCst), 2);
+    assert!(decision.reason.contains("paused"), "{}", decision.reason);
+}
+
+#[tokio::test]
+async fn a_slow_ollama_pauses_the_classifier_too() {
+    let (addr, seen) = ollama(|| async {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        grade("low", "low")
+    })
+    .await;
+    let router = router_with(addr, "failure_limit = 1", "");
+
+    let first = router.route(&view("fix it")).await;
+    assert_eq!(first.reason, "classifier fallback (timeout): default tier");
+
+    let started = Instant::now();
+    router.route(&view("fix it")).await;
+    assert!(started.elapsed() < Duration::from_millis(50));
+    assert_eq!(seen.calls.load(Ordering::SeqCst), 1);
 }

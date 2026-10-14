@@ -44,21 +44,55 @@ The requests Claude Code makes while answering that message keep the same model.
 
 ## When the classifier cannot answer
 
-Your request is never failed or held back for long. If Ollama is not running, answers with an
-error, takes longer than `timeout_ms`, or gives an answer that breaks the format, the message
-goes to the `default_tier` instead. The log says why:
+Your request is never failed, and never held back for longer than `timeout_ms`. When the
+classifier gives no usable answer, a fallback decides instead:
 
-- `reason=classifier low, confidence 0.90`: the classifier decided
-- `reason=classifier failed (timeout), default tier`
-- `reason=classifier failed (ollama unreachable), default tier`
-- `reason=classifier failed (ollama status 404), default tier`: usually a model that was not pulled
-- `reason=classifier failed (invalid answer), default tier`
+- **The rules router**, if you turned it on (`[rules] enabled = true`). Your rules and `!low` /
+  `!high` markers then decide, as described in [the rules router](rules.md).
+- **The default tier** (`default_tier`), if the rules are off.
 
-The proxy also logs a warning with the same cause each time.
+The classifier gives no usable answer when:
+
+- Ollama is not running or the connection drops
+- Ollama answers with an error, usually a model that was not pulled (status 404)
+- the answer takes longer than `timeout_ms`
+- the answer breaks the format
+- the model says it is less sure than `min_confidence`. A message it is unsure about is not
+  lowered by a guess.
+- the classifier is paused (see below)
+
+The log says which one, in the `reason` field:
+
+- `classifier low, confidence 0.90`: the classifier decided
+- `classifier fallback (timeout): default tier`
+- `classifier fallback (ollama unreachable): rule small-fix`: the rules decided
+- `classifier fallback (ollama status 404): default tier`
+- `classifier fallback (invalid answer): default tier`
+- `classifier fallback (confidence 0.30 below 0.50): no rule matched, default tier`
+- `classifier fallback (paused after repeated failures): default tier`
+
+The proxy also logs a warning with the cause each time a call fails.
+
+## Pausing after repeated failures
+
+If Ollama is stopped, every message would otherwise wait for the full timeout before the
+fallback decides. To avoid that, after `failure_limit` failures in a row (3 by default) the
+classifier is not called for `cooldown_secs` seconds (30 by default). During that time messages
+go straight to the fallback with no wait, and the proxy logs one warning when it pauses.
+
+When the pause ends, the next message checks whether Ollama is back. If it answers, the
+classifier works normally again and the proxy logs `classifier answering again`. If it fails,
+the pause starts over. Only one message at a time makes that check. A low-confidence answer
+counts as an answer: it does not count as a failure.
+
+The pause lasts until the cooldown ends, even if you start Ollama sooner. Restarting the proxy
+clears it.
+
+## Loading the model
 
 The model needs to be loaded in memory to answer within the timeout. The proxy asks Ollama to
 load it at startup and to keep it loaded (`keep_alive`). If Ollama is not ready at startup, the
-proxy says so and the first messages use the default tier.
+proxy says so and the first messages use the fallback until a call succeeds.
 
 ## Settings
 
@@ -70,6 +104,9 @@ In the `[classifier]` block of [the config file](config.md):
 | `model` | `qwen2.5:3b` | The Ollama model that grades messages. |
 | `timeout_ms` | `500` | Longest wait for an answer, in milliseconds. |
 | `keep_alive` | `30m` | How long Ollama keeps the model loaded after a call. `-1` keeps it loaded. |
+| `min_confidence` | `0.5` | Answers with a lower confidence (0 to 1) are not used. |
+| `failure_limit` | `3` | Failures in a row before the classifier is paused. At least 1. |
+| `cooldown_secs` | `30` | How long the classifier is paused. At least 1. |
 | `max_chars` | `600` | Most characters of your message the model sees. |
 | `prompt_file` | not set | Your own prompt, replacing the built-in one. |
 
@@ -95,16 +132,25 @@ Set `router = "rules"` (or remove the line) and restart the proxy.
 ## For developers
 
 - `src/classifier_router.rs`: `ClassifierRouter::new(&Config, OllamaClient, Prompt)` implements
-  `Router`. Its decisions use `DecisionSource::Classifier`, for failures too: a failure returns
-  the default tier's decision with a reason naming the cause. `warm_up()` loads the model.
+  `Router`. A usable answer gives `DecisionSource::Classifier`. Every other outcome goes through
+  `fallback()`: it asks a `RulesRouter` when `rules.enabled`, else uses `default_tier`, then sets
+  the source to `DecisionSource::Fallback` and the reason to
+  `classifier fallback (<cause>): <inner reason>`. `warm_up()` loads the model.
+- `src/breaker.rs`: `Breaker` counts failures in a row and refuses calls until the cooldown ends.
+  Time is passed in (`allow(now)`, `record_failure(now)`), so its tests do not sleep. After the
+  cooldown one call is let through and the next only after `probe_window` (the call timeout), so
+  there is no "probe in progress" flag that a dropped request could leave set. `record_*` return
+  a `Change` that the router uses to log once when it opens and once when it closes. Timeouts,
+  unreachable, status, unreadable replies and invalid answers count as failures; a low-confidence
+  answer does not.
 - `src/ollama.rs`: `OllamaClient` shares one `reqwest` client, posts to `/api/chat` with
   `stream: false`, `format` set to `classifier::output_schema()`, `temperature: 0`,
   `think: false` and a small `num_predict`. `ClassifyError` separates timeout, unreachable,
   status, unreadable reply and invalid answer. Its `label()` is the only text that reaches logs.
 - `main.rs` installs the router when `router = "classifier"` and starts the warm-up in a
   background task.
-- Not done yet: a fallback to the rules router, a confidence threshold and a circuit breaker
-  after repeated failures (#20).
 
 Tests use a mock Ollama (`tests/classifier.rs`): valid grade, effort capping, no credentials
-forwarded, continuation reuse, invalid answers, error status, Ollama down, slow Ollama.
+forwarded, continuation reuse, invalid answers, error status, Ollama down, slow Ollama, rules
+and default-tier fallback with their reasons, the confidence threshold, pausing, recovery and a
+failed recovery check.
