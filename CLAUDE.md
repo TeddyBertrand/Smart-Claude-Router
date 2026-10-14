@@ -8,8 +8,9 @@ Quota-saving router for Claude Code: a local HTTP proxy that Claude Code talks t
 `ANTHROPIC_BASE_URL`, which picks the Claude model and effort level per request (rules first,
 later a small local model via Ollama) and forwards to the Anthropic API.
 
-Status: v0.1.0 in progress. The proxy is a transparent passthrough with live streaming
-(#7, #8); no routing yet. The roadmap lives in GitHub milestones v0.1.0–v0.4.0 (issues #6–#25).
+Status: v0.2.0. The proxy streams live and has rule-based routing (opt-in via `[rules] enabled`,
+dry run via `--dry-run`); the local-model classifier is v0.3.0. The roadmap lives in GitHub
+milestones v0.1.0–v0.4.0 (issues #6–#25).
 Before touching request handling, read `docs/spike-request-shape.md` (#6: the real Claude Code
 request shape, captured with subscription auth); redacted request fixtures with an `expect`
 label are in `tests/fixtures/requests/`.
