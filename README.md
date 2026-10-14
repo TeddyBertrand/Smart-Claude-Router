@@ -47,6 +47,7 @@ Rust for this.
 - [Setup guide](docs/setup.md): installing, starting automatically at login, troubleshooting,
   and removing everything.
 - [The proxy](docs/proxy.md): what it does and what it never does.
+- [The router](docs/router.md): how the model and effort for a request get decided.
 - [Running it](docs/run.md): options, logs, stopping.
 - [The config file](docs/config.md): every setting.
 

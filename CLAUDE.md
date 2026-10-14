@@ -37,6 +37,13 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   that sees each forwarded chunk (still compressed) and one `StreamEnd`. `ClientGone` is detected
   in `Drop` of the wrapped body, which is also what cancels the upstream request. HEAD responses
   are never observed. Nothing in production installs a tap yet (#24 will).
+- `src/router.rs`: `Router` trait (`decide(&RequestView) -> BoxFuture<RoutingDecision>`, boxed so it
+  is `dyn`-safe), `RequestView::parse(headers, body) -> Option<_>` (`None` = unparseable → not
+  routed, forwarded as is), `RoutingDecision { model, effort, reason, source }`,
+  `PassthroughRouter` (default). `Proxy::with_router` swaps it. The proxy asks the router only for
+  `POST /v1/messages` and just logs the decision at `debug`; applying it is #13. `RequestView`'s
+  `Debug` hides `last_user_text`. Turn detection (#14) and background detection (#16) are not
+  built yet.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed
