@@ -42,8 +42,9 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   routed, forwarded as is), `RoutingDecision { model, effort, reason, source }`,
   `PassthroughRouter` (default). `Proxy::with_router` swaps it. The proxy asks the router only for
   `POST /v1/messages` and just logs the decision at `debug`; applying it is #13. `RequestView`'s
-  `Debug` hides `last_user_text`. Turn detection (#14) and background detection (#16) are not
-  built yet.
+  `Debug` hides `last_user_text`. `background_kind` (quota probe = `max_tokens == 1`, title =
+  `output_config.format`) is checked before `decide`; matches skip the router. Compaction is
+  deliberately not background. Turn detection (#14) is not built yet.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed

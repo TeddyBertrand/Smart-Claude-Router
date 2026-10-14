@@ -37,6 +37,20 @@ stored. Printing it for debugging shows the length of your last message, not the
 - a short reason, for the logs
 - who decided: passthrough, rules or classifier
 
+## Requests the router skips
+
+Claude Code also sends small requests of its own that no user asked for. The router recognises
+two of them and does not look at them at all:
+
+- the quota check, a request that may only produce one token
+- the session title, a request that asks for a structured answer
+
+They are forwarded exactly as Claude Code sent them, with the model and effort Claude Code chose.
+With `--log-level debug`, each one logs `background request, not routed` and its kind.
+
+Compaction (`/compact`) is not on this list. It looks the same as a normal message, so it is
+treated as one: it stays on the model the conversation already uses.
+
 ## What it never does
 
 - It never changes your request. For now the answer is only written to the debug log. Applying
@@ -71,9 +85,12 @@ The code lives in `src/router.rs`:
   own effort". `reason` must never contain prompt text.
 - `PassthroughRouter` is the default. `Proxy::with_router` swaps it.
 
-Turn detection (new turn or continuation, #14) and background request detection (#16) are not
-done here. The view carries what they need: `last_user_text`, `has_tool_use`, `max_tokens`,
-`has_output_format`, `session_id` and `agent_id`.
+`background_kind(&RequestView) -> Option<BackgroundKind>` recognises the quota probe
+(`max_tokens == 1`) and title generation (`output_config.format` present). The proxy calls it
+before `decide` and skips the router when it returns `Some`. Add new background kinds there.
+
+Turn detection (new turn or continuation, #14) is not done here. The view carries what it needs:
+`last_user_text`, `has_tool_use`, `session_id` and `agent_id`.
 
 `tests/router.rs` runs `RequestView::parse` against every file in `tests/fixtures/requests/`.
 A new fixture is checked by the "every fixture parses" test without further changes.
