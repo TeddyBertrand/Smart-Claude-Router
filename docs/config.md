@@ -25,23 +25,25 @@ When the proxy starts, it prints which file it used, or says it is using the bui
 | `upstream` | `https://api.anthropic.com` | Where requests are sent on to. |
 | `default_tier` | `high` | The tier used when routing has no better answer. |
 | `mode` | `route` | `route` applies the router's choices. `observe` only logs them and changes nothing. See [dry run](dry-run.md). |
+| `router` | `rules` | Which router picks the tier: `rules` (acts only when `[rules] enabled = true`) or `classifier`, a local model that grades each message. See [the classifier router](classifier.md). |
 | `[tiers.low]` | Haiku, effort `medium` | The cheapest model and effort routing can choose. |
 | `[tiers.medium]` | Sonnet, effort `high` | The middle option. |
 | `[tiers.high]` | Opus, effort `xhigh` | The strongest option. These are Claude Code's own defaults. |
 | `[rules]` | `enabled = false` | Turns the rules router on, and holds your rules. See [the rules router](rules.md). |
-| `[classifier]` | `max_chars = 600` | What the local-model classifier is shown and told. Not used yet. See [the classifier prompt](classifier-prompt.md). |
+| `[classifier]` | Ollama at `127.0.0.1:11434`, model `qwen2.5:3b` | Which local model grades messages, how long to wait for it, and what it is shown. Used when `router = "classifier"`. See [the classifier router](classifier.md) and [the classifier prompt](classifier-prompt.md). |
 
 Effort can be `low`, `medium`, `high`, `xhigh` or `max`.
 
 ## What the tiers are for
 
-When the rules router is on, it picks one of the three tiers for each message you send, and
-Claude Code's request is changed to use that tier's model and effort. With `enabled = false`,
-the default, nothing uses the tiers and the proxy forwards every request unchanged.
+When the rules router or the classifier router is on, it picks one of the three tiers for each
+message you send, and Claude Code's request is changed to use that tier's model and effort. With
+the defaults (`router = "rules"` and `enabled = false`) nothing uses the tiers and the proxy
+forwards every request unchanged.
 
 The default tier is `high` because that is what Claude Code already uses. When the rules are on
-and none of them matches, the message goes to the default tier, so a message is only lowered by a
-rule or an override marker you chose.
+and none of them matches, or when the classifier cannot answer, the message goes to the default
+tier, so a message is only lowered by a rule, an override marker or a classifier answer.
 
 ## Rules
 

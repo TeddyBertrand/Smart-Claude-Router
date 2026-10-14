@@ -5,9 +5,10 @@
 The router is the part of Smart-Claude-Router that answers one question for each message Claude
 Code sends: which Claude model should handle this, and how hard should it think?
 
-It does not decide anything smart yet. The only router today is the passthrough router. It
-always answers "the model Claude Code asked for, with the effort Claude Code asked for". The
-rules (#15) and the local model (v0.3.0) will give different answers to the same question.
+There are three routers. The passthrough router is the default: it always answers "the model
+Claude Code asked for, with the effort Claude Code asked for". [The rules router](rules.md) and
+[the classifier router](classifier.md), which asks a small local model, give different answers
+to the same question.
 
 ## Why it exists
 
@@ -102,7 +103,8 @@ what the request already has, nothing is edited and the request goes out as Clau
 
 ## How to use it and turn it off
 
-Nothing to configure. The passthrough router is always on and changes nothing. Every request
+By default the passthrough router is used and changes nothing. Turn on the rules router or the
+classifier router in [the config file](config.md) to route. Every request
 line in the log shows the model Claude Code asked for (`model`), the model the router chose
 (`routed`) and why (`reason`). With `--log-level debug`, each `/v1/messages` request also logs a
 `routing decision` line with the effort and who decided.

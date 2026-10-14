@@ -26,9 +26,20 @@ pub struct Config {
     pub default_tier: Tier,
     /// Whether routing decisions are applied to requests or only logged.
     pub mode: Mode,
+    /// Which router decides the tier of each new message.
+    pub router: RouterKind,
     pub tiers: Tiers,
     pub rules: Rules,
     pub classifier: Classifier,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RouterKind {
+    /// The rules checklist, which only acts when `[rules] enabled` is true.
+    Rules,
+    /// A local model grades each new message (see `[classifier]`).
+    Classifier,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -50,10 +61,18 @@ pub struct Rules {
     pub rule: Vec<Rule>,
 }
 
-/// What the classifier is shown and told. The backend settings come with the Ollama client.
+/// The classifier: a local model (Ollama) that grades each new message, and what it is shown.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Classifier {
+    /// Where Ollama listens. Keep it on this machine: your messages are sent there.
+    pub url: String,
+    /// The Ollama model that grades messages.
+    pub model: String,
+    /// Longest wait for the model's answer, in milliseconds. After that the default tier is used.
+    pub timeout_ms: u64,
+    /// How long Ollama keeps the model loaded after a call (`"30m"`, `"-1"` for always).
+    pub keep_alive: String,
     /// Most characters of your message the classifier sees. Longer messages keep their start and
     /// end.
     pub max_chars: usize,
@@ -64,6 +83,10 @@ pub struct Classifier {
 impl Default for Classifier {
     fn default() -> Self {
         Self {
+            url: "http://127.0.0.1:11434".into(),
+            model: "qwen2.5:3b".into(),
+            timeout_ms: 500,
+            keep_alive: "30m".into(),
             max_chars: 600,
             prompt_file: None,
         }
@@ -117,7 +140,8 @@ pub struct TierModel {
 }
 
 /// Values accepted by `output_config.effort` (see `docs/spike-request-shape.md`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+/// Ordered from least to most effort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Effort {
     Low,
@@ -148,6 +172,7 @@ impl Default for Config {
             // What Claude Code already uses on its own, so defaults change nothing.
             default_tier: Tier::High,
             mode: Mode::Route,
+            router: RouterKind::Rules,
             tiers: Tiers::default(),
             rules: Rules::default(),
             classifier: Classifier::default(),
@@ -228,6 +253,23 @@ impl Config {
             if tier.model.trim().is_empty() {
                 bail!("tiers.{name}.model must not be empty");
             }
+        }
+        let classifier_url = reqwest::Url::parse(&self.classifier.url)
+            .with_context(|| format!("classifier.url: {:?} is not a URL", self.classifier.url))?;
+        if !matches!(classifier_url.scheme(), "http" | "https") || classifier_url.host().is_none() {
+            bail!(
+                "classifier.url: {:?} must be an http(s) URL with a host",
+                self.classifier.url
+            );
+        }
+        if self.classifier.model.trim().is_empty() {
+            bail!("classifier.model must not be empty");
+        }
+        if self.classifier.timeout_ms == 0 {
+            bail!("classifier.timeout_ms must be at least 1");
+        }
+        if self.classifier.keep_alive.trim().is_empty() {
+            bail!("classifier.keep_alive must not be empty");
         }
         if self.classifier.max_chars < 20 {
             bail!("classifier.max_chars must be at least 20");
@@ -405,6 +447,22 @@ mod tests {
             Some(PathBuf::from("/etc/prompt.md"))
         );
         assert!(err("[classifier]\nmax_chars = 5").contains("classifier.max_chars"));
+        assert_eq!(Config::default().router, RouterKind::Rules);
+        assert_eq!(
+            Config::from_toml("router = \"classifier\"").unwrap().router,
+            RouterKind::Classifier
+        );
+        assert!(err("router = \"magic\"").contains("magic"));
+        let custom = Config::from_toml(
+            "[classifier]\nurl = \"http://localhost:1234\"\nmodel = \"m\"\ntimeout_ms = 900\nkeep_alive = \"-1\"",
+        )
+        .unwrap()
+        .classifier;
+        assert_eq!((custom.timeout_ms, custom.keep_alive.as_str()), (900, "-1"));
+        assert!(err("[classifier]\nurl = \"localhost\"").contains("classifier.url"));
+        assert!(err("[classifier]\nmodel = \" \"").contains("classifier.model"));
+        assert!(err("[classifier]\ntimeout_ms = 0").contains("classifier.timeout_ms"));
+        assert!(err("[classifier]\nkeep_alive = \"\"").contains("classifier.keep_alive"));
         assert!(err("[classifier]\nprompt_file = \"\"").contains("classifier.prompt_file"));
         assert!(err("[classifier]\nmax_char = 50").contains("max_char"));
     }

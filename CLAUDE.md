@@ -69,7 +69,18 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   (`requested`, `would_route`, `effort`, `reason`, `turn`) and forwards the original bytes; the
   request line then has `routed=-`. `main.rs` prints the mode at startup and warns when observing
   with rules off.
-- `src/classifier.rs` (#19; no backend yet, #18): `Prompt` (`builtin()` = `prompts/classifier-v1.md`
+- `src/ollama.rs` + `src/classifier_router.rs` (#18): `OllamaClient` (one shared `reqwest`
+  client, `POST /api/chat`, `stream:false`, `format` = `output_schema()`, `keep_alive`, hard
+  per-call timeout `timeout_ms`; `warm_up()` hits `/api/generate` with no prompt) and
+  `ClassifierRouter` (`Router`, source `Classifier`). tier → model via `[tiers]`; effort =
+  `min(tier effort, classifier effort)`. Any `ClassifyError` (timeout, unreachable, status,
+  unreadable reply, invalid answer) returns the `default_tier` decision with reason
+  `classifier failed (<label>), default tier`; only `ClassifyError::label()` is logged, never
+  message or answer text. Config top-level `router = "rules" | "classifier"` (default `rules`;
+  `classifier` needs no `enabled` switch) plus `[classifier] url/model/timeout_ms/keep_alive`.
+  `main.rs` installs it, spawns the warm-up and warns when `url` is not loopback. #20 still has
+  to add rules fallback, confidence threshold, circuit breaker and a `fallback` source.
+- `src/classifier.rs` (#19): `Prompt` (`builtin()` = `prompts/classifier-v1.md`
   via `include_str!`, or `prompt_file`; `PROMPT_VERSION`, 900-token budget tested),
   `condense(&RequestView, max_chars)` (deterministic model input: message as a JSON string cut
   to head 2/3 + tail 1/3, plus counts), `output_schema()` (Ollama `format`),

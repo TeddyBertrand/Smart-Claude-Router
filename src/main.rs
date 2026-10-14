@@ -10,7 +10,10 @@ use std::{
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use smart_claude_router::{
-    config::{Config, Mode},
+    classifier::Prompt,
+    classifier_router::ClassifierRouter,
+    config::{Config, Mode, RouterKind},
+    ollama::OllamaClient,
     proxy::Proxy,
     rules::RulesRouter,
 };
@@ -98,17 +101,49 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     let (stop, stopped) = oneshot::channel::<()>();
     let observe = config.mode == Mode::Observe;
     let mut proxy = Proxy::new(&config.upstream)?.with_dry_run(observe);
-    if config.rules.enabled {
-        proxy = proxy.with_router(Arc::new(RulesRouter::new(&config)));
-    }
-    match (observe, config.rules.enabled) {
-        (false, false) => tracing::info!("mode: route, but rules are off: requests are forwarded unchanged"),
-        (false, true) => tracing::info!("mode: route, rules router ({} rules)", config.rules.rule.len()),
-        (true, true) => tracing::info!(
-            "mode: observe (dry run), rules router ({} rules): decisions are logged, requests are forwarded unchanged",
-            config.rules.rule.len()
+    let routing = match config.router {
+        RouterKind::Classifier => {
+            let prompt = Prompt::load(&config.classifier)?;
+            let summary = format!(
+                "classifier router (model {} at {}, prompt {})",
+                config.classifier.model,
+                config.classifier.url,
+                prompt.version()
+            );
+            if !is_local(&config.classifier.url) {
+                tracing::warn!(
+                    "classifier.url is not on this machine: the text of your messages is sent to {}",
+                    config.classifier.url
+                );
+            }
+            let client = OllamaClient::new(&config.classifier)?;
+            let router = Arc::new(ClassifierRouter::new(&config, client, prompt));
+            let warming = router.clone();
+            tokio::spawn(async move {
+                match warming.warm_up().await {
+                    Ok(()) => tracing::info!("classifier model loaded"),
+                    Err(err) => tracing::warn!(
+                        cause = %err.label(),
+                        "cannot load the classifier model; messages use the default tier until Ollama answers"
+                    ),
+                }
+            });
+            proxy = proxy.with_router(router);
+            Some(summary)
+        }
+        RouterKind::Rules if config.rules.enabled => {
+            proxy = proxy.with_router(Arc::new(RulesRouter::new(&config)));
+            Some(format!("rules router ({} rules)", config.rules.rule.len()))
+        }
+        RouterKind::Rules => None,
+    };
+    match (observe, routing) {
+        (false, None) => tracing::info!("mode: route, but rules are off: requests are forwarded unchanged"),
+        (false, Some(routing)) => tracing::info!("mode: route, {routing}"),
+        (true, Some(routing)) => tracing::info!(
+            "mode: observe (dry run), {routing}: decisions are logged, requests are forwarded unchanged"
         ),
-        (true, false) => tracing::warn!(
+        (true, None) => tracing::warn!(
             "mode: observe (dry run), but rules are off ([rules] enabled = false): there is nothing to observe"
         ),
     }
@@ -132,6 +167,14 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     }
     tracing::info!("stopped");
     Ok(())
+}
+
+/// Whether `url` points at this machine. The config is validated, so it parses.
+fn is_local(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| matches!(host.as_str(), "localhost" | "127.0.0.1" | "[::1]"))
 }
 
 /// Logs go to stderr (the journal under systemd), colored only on a terminal. Our own crate logs
