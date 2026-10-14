@@ -69,6 +69,13 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   (`requested`, `would_route`, `effort`, `reason`, `turn`) and forwards the original bytes; the
   request line then has `routed=-`. `main.rs` prints the mode at startup and warns when observing
   with rules off.
+- `src/classifier.rs` (#19; no backend yet, #18): `Prompt` (`builtin()` = `prompts/classifier-v1.md`
+  via `include_str!`, or `prompt_file`; `PROMPT_VERSION`, 900-token budget tested),
+  `condense(&RequestView, max_chars)` (deterministic model input: message as a JSON string cut
+  to head 2/3 + tail 1/3, plus counts), `output_schema()` (Ollama `format`),
+  `Classification::parse` (strict; `xhigh`/`max` and confidence outside 0..1 are errors). Bump
+  `PROMPT_VERSION` and the file name on any prompt/schema change. Config `[classifier]`
+  (`max_chars`, `prompt_file`); #18 adds the backend keys.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed

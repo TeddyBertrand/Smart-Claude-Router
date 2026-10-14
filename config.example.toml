@@ -70,3 +70,14 @@ effort = "xhigh"
 
 [rules]
 enabled = false
+
+# What the local-model classifier is shown and told (see docs/classifier-prompt.md). The
+# classifier itself arrives with the Ollama client; these two settings are ready for it.
+#
+# max_chars: most characters of your message the classifier sees. A longer message keeps its
+# start and its end, with the middle cut out.
+# prompt_file: path to your own classifier prompt, replacing the built-in one. Not set by default.
+
+[classifier]
+max_chars = 600
+# prompt_file = "/home/you/classifier-prompt.md"

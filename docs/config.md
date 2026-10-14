@@ -29,6 +29,7 @@ When the proxy starts, it prints which file it used, or says it is using the bui
 | `[tiers.medium]` | Sonnet, effort `high` | The middle option. |
 | `[tiers.high]` | Opus, effort `xhigh` | The strongest option. These are Claude Code's own defaults. |
 | `[rules]` | `enabled = false` | Turns the rules router on, and holds your rules. See [the rules router](rules.md). |
+| `[classifier]` | `max_chars = 600` | What the local-model classifier is shown and told. Not used yet. See [the classifier prompt](classifier-prompt.md). |
 
 Effort can be `low`, `medium`, `high`, `xhigh` or `max`.
 
