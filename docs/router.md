@@ -51,6 +51,33 @@ With `--log-level debug`, each one logs `background request, not routed` and its
 Compaction (`/compact`) is not on this list. It looks the same as a normal message, so it is
 treated as one: it stays on the model the conversation already uses.
 
+## One model per turn
+
+One message from you usually causes several requests. Claude reads a file, gets the content,
+runs a command, gets the result, and only then answers. Every one of those requests belongs to
+the same turn, and they all have to use the same model. A model can't continue the hidden
+reasoning of another model, so switching in the middle of a turn can make Anthropic refuse the
+request. It would also throw away the cached conversation.
+
+So the router is asked once per turn:
+
+- **New turn:** your last message has text or an image in it. The router decides, and the proxy
+  remembers the answer for this conversation.
+- **Same turn:** the last message only carries tool results. The remembered answer is used
+  again, and the log shows the reason as `same turn: ...`. A system note after the tool results
+  doesn't change this.
+
+A conversation is a Claude Code session. A subagent counts as its own conversation, so its model
+is chosen separately from the main one.
+
+If a request continues a turn but nothing is remembered for it, the request is forwarded
+exactly as Claude Code sent it. This happens after the proxy restarts in the middle of a turn,
+when a conversation was idle for over an hour, and for requests that carry no session id.
+
+The memory only lives in the running proxy. It holds the model, effort and reason for up to
+1024 conversations and forgets a conversation after an hour without requests. It never holds
+your messages and is never written to disk.
+
 ## What changes in a request
 
 When the router chooses a different model or effort than Claude Code asked for, the proxy edits
@@ -115,9 +142,17 @@ are never reformatted. The proxy then sets `content-length` to the new size. The
 effort is changed on the latest `role: "system"` message that has `output_config.effort`; older
 ones are history and stay as they are.
 
-Turn detection (new turn or continuation, #14) is not done here, so a decision is applied to
-every routed request, continuations included. Today only the passthrough router exists, which
-never changes anything. The view carries what it needs:
+`RequestView::turn` is `Turn::New` or `Turn::Continuation`. Trailing `role: "system"` messages
+are skipped; if the last message left is a user message made only of `tool_result` blocks it is a
+continuation. Anything else is new, including tool results mixed with text, an image, an
+assistant message last, or no messages. Compaction has no marker, so it is a new turn.
+
+`src/conversation.rs` has `Conversations`, which the proxy owns. `plan(&RequestView)` returns
+`Plan::Decide` (ask the router, then call `remember`), `Plan::Reuse(decision)` or `Plan::Skip`.
+The key is session id plus agent id (`ConversationKey::from_view`, `None` without a session id).
+Entries expire after `DEFAULT_TTL` (1 hour, refreshed on use) and the least recently used one
+is dropped at `DEFAULT_MAX_ENTRIES` (1024). The lock is a std `Mutex` held only for a map
+lookup, never across an `await`. The two limits are constants for now, not settings. The view carries what it needs:
 `last_user_text`, `has_tool_use`, `session_id` and `agent_id`.
 
 `tests/router.rs` runs `RequestView::parse` against every file in `tests/fixtures/requests/`.

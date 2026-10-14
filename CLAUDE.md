@@ -49,7 +49,12 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   original, `Err` = warn and forward original. The proxy resets `content-length` after a rewrite
   and the info log line carries `model` (requested), `routed` and `reason`. `background_kind` (quota probe = `max_tokens == 1`, title =
   `output_config.format`) is checked before `decide`; matches skip the router. Compaction is
-  deliberately not background. Turn detection (#14) is not built yet.
+  deliberately not background. `RequestView::turn` (`Turn::New`/`Continuation`) implements the
+  spike's rule. `src/conversation.rs` `Conversations` (owned by `Proxy`, key = session id + agent
+  id, 1 h idle TTL, 1024 entries LRU, in memory only) turns that into a `Plan`: `Decide` (new
+  turn, ask the router and `remember`), `Reuse` (continuation, stored decision, reason prefixed
+  `same turn:`), `Skip` (continuation with nothing stored, e.g. after a restart: forward
+  unchanged, never route mid-turn).
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed
