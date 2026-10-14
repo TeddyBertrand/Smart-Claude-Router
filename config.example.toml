@@ -22,6 +22,12 @@ default_tier = "high"
 # the same and wins over this setting.
 mode = "route"
 
+# Which router picks the tier of each new message:
+# "rules": your checklist (see [rules] below). It only acts when [rules] enabled = true.
+# "classifier": a local Ollama model grades each message (see [classifier] below). Choosing it
+# turns routing on: unlike the rules, it needs no separate "enabled" switch.
+router = "rules"
+
 # The models the router chooses between (routing arrives in v0.2.0).
 # effort: "low", "medium", "high", "xhigh" or "max".
 # A tier you write here needs both model and effort; tiers you leave out keep these values.
@@ -71,13 +77,22 @@ effort = "xhigh"
 [rules]
 enabled = false
 
-# What the local-model classifier is shown and told (see docs/classifier-prompt.md). The
-# classifier itself arrives with the Ollama client; these two settings are ready for it.
+# The local-model classifier (see docs/classifier.md). Used when router = "classifier".
+# Your message text is sent to the url below, so keep it on this machine.
 #
+# url: where Ollama listens.
+# model: the Ollama model that grades messages. Pull it first: `ollama pull qwen2.5:3b`.
+# timeout_ms: longest wait for an answer. After that the default tier is used.
+# keep_alive: how long Ollama keeps the model loaded after a call ("-1" = always), so a call
+# never waits for the model to load.
 # max_chars: most characters of your message the classifier sees. A longer message keeps its
-# start and its end, with the middle cut out.
+# start and its end, with the middle cut out (see docs/classifier-prompt.md).
 # prompt_file: path to your own classifier prompt, replacing the built-in one. Not set by default.
 
 [classifier]
+url = "http://127.0.0.1:11434"
+model = "qwen2.5:3b"
+timeout_ms = 500
+keep_alive = "30m"
 max_chars = 600
 # prompt_file = "/home/you/classifier-prompt.md"
