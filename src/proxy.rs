@@ -25,6 +25,7 @@ use axum::{
 };
 
 use crate::{
+    conversation::{Conversations, Plan},
     rewrite,
     router::{background_kind, PassthroughRouter, RequestView, Router as RouteDecider},
     stream::{Observed, ResponseInfo, Tap},
@@ -39,6 +40,7 @@ pub struct Proxy {
     upstream: Arc<str>,
     tap: Option<Arc<dyn Tap>>,
     router: Arc<dyn RouteDecider>,
+    conversations: Arc<Conversations>,
 }
 
 impl Proxy {
@@ -55,6 +57,7 @@ impl Proxy {
             upstream: upstream.trim_end_matches('/').into(),
             tap: None,
             router: Arc::new(PassthroughRouter),
+            conversations: Arc::default(),
         })
     }
 
@@ -84,7 +87,21 @@ impl Proxy {
             tracing::debug!(kind = kind.as_str(), "background request, not routed");
             return None;
         }
-        let decision = self.router.decide(&view).await;
+        let decision = match self.conversations.plan(&view) {
+            Plan::Decide => {
+                let decision = self.router.decide(&view).await;
+                self.conversations.remember(&view, &decision);
+                decision
+            }
+            Plan::Reuse(mut decision) => {
+                decision.reason = format!("same turn: {}", decision.reason);
+                decision
+            }
+            Plan::Skip => {
+                tracing::debug!("continuation without a remembered decision, not routed");
+                return None;
+            }
+        };
         tracing::debug!(
             model = %decision.model,
             effort = ?decision.effort,

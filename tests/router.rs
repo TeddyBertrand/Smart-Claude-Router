@@ -18,7 +18,7 @@ use smart_claude_router::{
     proxy::Proxy,
     router::{
         background_kind, BackgroundKind, BoxFuture, DecisionSource, PassthroughRouter, RequestView,
-        Router as RouteDecider, RoutingDecision,
+        Router as RouteDecider, RoutingDecision, Turn,
     },
 };
 use tokio::net::TcpListener;
@@ -82,8 +82,12 @@ fn new_turns_have_user_text_and_continuations_do_not() {
     for fixture in fixtures() {
         let view = view(&fixture);
         match fixture.turn.as_deref() {
-            Some("new") => assert!(!view.last_user_text.is_empty(), "{}", fixture.name),
+            Some("new") => {
+                assert_eq!(view.turn, Turn::New, "{}", fixture.name);
+                assert!(!view.last_user_text.is_empty(), "{}", fixture.name);
+            }
             Some("continuation") => {
+                assert_eq!(view.turn, Turn::Continuation, "{}", fixture.name);
                 assert!(view.last_user_text.is_empty(), "{}", fixture.name);
                 assert!(view.has_tool_use, "{}", fixture.name);
             }
@@ -322,6 +326,11 @@ async fn routed_requests_differ_only_in_model_and_effort() {
             assert_eq!(sent, fixture.body, "{} is background", fixture.name);
             continue;
         }
+        if fixture.turn.as_deref() == Some("continuation") {
+            // Nothing is remembered for this conversation, so the request is not routed.
+            assert_eq!(sent, fixture.body, "{} has no earlier turn", fixture.name);
+            continue;
+        }
 
         let mut expected: Value = serde_json::from_slice(&fixture.body).unwrap();
         expected["model"] = json!("claude-haiku-5-5");
@@ -424,4 +433,113 @@ async fn background_requests_skip_the_router_and_arrive_byte_identical() {
     assert!(asked.lock().unwrap().is_empty());
     let sent: Vec<_> = background.into_iter().map(|f| f.body).collect();
     assert_eq!(*received.lock().unwrap(), sent);
+}
+
+fn turn_of_messages(messages: Value) -> Turn {
+    let body = json!({"model": "claude-opus-5-5", "messages": messages});
+    RequestView::parse(&HeaderMap::new(), body.to_string().as_bytes())
+        .unwrap()
+        .turn
+}
+
+#[test]
+fn turn_detection_follows_the_last_message_that_is_not_a_system_note() {
+    let text = json!({"role": "user", "content": [{"type": "text", "text": "go"}]});
+    let result = json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t"}]});
+    let mixed = json!({"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": "t"},
+        {"type": "text", "text": "also this"},
+    ]});
+    let image = json!({"role": "user", "content": [{"type": "image", "source": {}}]});
+    let plain = json!({"role": "user", "content": "go"});
+    let system = json!({"role": "system", "content": "note"});
+    let assistant = json!({"role": "assistant", "content": [{"type": "tool_use", "id": "t"}]});
+
+    assert_eq!(turn_of_messages(json!([text])), Turn::New);
+    assert_eq!(turn_of_messages(json!([plain])), Turn::New);
+    assert_eq!(turn_of_messages(json!([image])), Turn::New);
+    assert_eq!(turn_of_messages(json!([assistant, mixed])), Turn::New);
+    assert_eq!(
+        turn_of_messages(json!([text, assistant, result])),
+        Turn::Continuation
+    );
+    assert_eq!(
+        turn_of_messages(json!([text, assistant, result, system, system])),
+        Turn::Continuation
+    );
+    assert_eq!(turn_of_messages(json!([text, system])), Turn::New);
+    assert_eq!(turn_of_messages(json!([text, assistant])), Turn::New);
+    assert_eq!(turn_of_messages(json!([])), Turn::New);
+}
+
+/// Answers `model-1`, `model-2`, ... one per question, so a repeated model means a reused answer.
+struct Counting(std::sync::atomic::AtomicUsize);
+
+impl RouteDecider for Counting {
+    fn decide<'a>(&'a self, _: &'a RequestView) -> BoxFuture<'a, RoutingDecision> {
+        Box::pin(async move {
+            let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            RoutingDecision {
+                model: format!("model-{n}"),
+                effort: None,
+                reason: "test".into(),
+                source: DecisionSource::Rules,
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_tool_loop_stays_on_one_model_and_a_new_message_decides_again() {
+    let received = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let sink = received.clone();
+    let upstream = serve(
+        Router::new().fallback(any(move |body: axum::body::Bytes| async move {
+            sink.lock().unwrap().push(body.to_vec());
+            "ok"
+        })),
+    )
+    .await;
+    let proxy = Proxy::new(&format!("http://{upstream}"))
+        .unwrap()
+        .with_router(Arc::new(Counting(Default::default())));
+    let proxy_addr = serve(proxy.router()).await;
+
+    let fixtures = fixtures();
+    let fixture = |name: &str| fixtures.iter().find(|f| f.name == name).unwrap();
+    let client = reqwest::Client::new();
+    let send = |name: &'static str, session: &'static str| {
+        let body = fixture(name).body.clone();
+        let request = client
+            .post(format!("http://{proxy_addr}/v1/messages?beta=true"))
+            .header("x-claude-code-session-id", session)
+            .body(body);
+        async move { request.send().await.unwrap() }
+    };
+    let steps = [
+        ("new-turn-first-message.json", "s1"),
+        ("continuation-tool-result.json", "s1"),
+        ("continuation-tool-result-trailing-system.json", "s1"),
+        ("new-turn-after-model-switch.json", "s1"),
+        ("continuation-tool-result.json", "s1"),
+        // Another conversation with no earlier turn: not routed.
+        ("continuation-tool-result.json", "s2"),
+    ];
+    for (name, session) in steps {
+        send(name, session).await;
+    }
+
+    let received = received.lock().unwrap();
+    let model = |i: usize| {
+        serde_json::from_slice::<Value>(&received[i]).unwrap()["model"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(model(0), "model-1");
+    assert_eq!(model(1), "model-1");
+    assert_eq!(model(2), "model-1");
+    assert_eq!(model(3), "model-2");
+    assert_eq!(model(4), "model-2");
+    assert_eq!(received[5], fixture("continuation-tool-result.json").body);
 }
