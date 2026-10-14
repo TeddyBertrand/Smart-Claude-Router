@@ -63,6 +63,19 @@ pub enum Effort {
     Max,
 }
 
+impl Effort {
+    /// The value as written in `output_config.effort`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
