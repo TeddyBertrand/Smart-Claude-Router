@@ -50,6 +50,7 @@ Rust for this.
 - [The router](docs/router.md): how the model and effort for a request get decided.
 - [The rules router](docs/rules.md): choose a cheaper model for easy messages, with `!low` and
   `!high` overrides.
+- [Dry run](docs/dry-run.md): see what the router would choose before it changes anything.
 - [Running it](docs/run.md): options, logs, stopping.
 - [The config file](docs/config.md): every setting.
 

@@ -25,6 +25,7 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8899 claude
 |---|---|
 | `--config <PATH>` | Use this config file instead of `~/.config/smart-claude-router/config.toml`. The file must exist. |
 | `--listen <IP:PORT>` | Listen on this address instead of the one in the config file. |
+| `--dry-run` | Log what the router would choose, but forward every request unchanged. See [dry run](dry-run.md). |
 | `--log-level <LEVEL>` | How much to print: `error`, `warn`, `info` (default), `debug` or `trace`. |
 
 Options win over the config file, and the config file wins over the built-in defaults.

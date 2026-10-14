@@ -24,6 +24,7 @@ When the proxy starts, it prints which file it used, or says it is using the bui
 | `listen` | `127.0.0.1:8899` | The address the proxy listens on. Claude Code must use the same one in `ANTHROPIC_BASE_URL`. |
 | `upstream` | `https://api.anthropic.com` | Where requests are sent on to. |
 | `default_tier` | `high` | The tier used when routing has no better answer. |
+| `mode` | `route` | `route` applies the router's choices. `observe` only logs them and changes nothing. See [dry run](dry-run.md). |
 | `[tiers.low]` | Haiku, effort `medium` | The cheapest model and effort routing can choose. |
 | `[tiers.medium]` | Sonnet, effort `high` | The middle option. |
 | `[tiers.high]` | Opus, effort `xhigh` | The strongest option. These are Claude Code's own defaults. |

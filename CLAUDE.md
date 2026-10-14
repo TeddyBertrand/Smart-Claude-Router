@@ -63,6 +63,11 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   `[rules] enabled` defaults to **false**; `main.rs` installs the router only when true (a
   no-match decision is `default_tier`, which could upgrade a user on a cheaper model, so it is
   opt-in). Rules are validated in `Config::validate`.
+- Dry run: `Config.mode` (`route` default / `observe`), `run --dry-run` wins over the file.
+  `Proxy::with_dry_run(true)` runs the whole pipeline, logs `dry run: would route` at `info`
+  (`requested`, `would_route`, `effort`, `reason`, `turn`) and forwards the original bytes; the
+  request line then has `routed=-`. `main.rs` prints the mode at startup and warns when observing
+  with rules off.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed
