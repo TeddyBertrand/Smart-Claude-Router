@@ -8,7 +8,8 @@
 //! disconnects, the response body is dropped, which drops the upstream request with it.
 //!
 //! Each request is logged once at `info`: method, path (never the query), status, time until the
-//! upstream answered, and the requested model. Headers and bodies are never logged.
+//! upstream answered, the requested model, and for routed requests the model it was routed to and
+//! why. Headers and bodies are never logged.
 
 use std::{
     sync::Arc,
@@ -24,6 +25,7 @@ use axum::{
 };
 
 use crate::{
+    rewrite,
     router::{background_kind, PassthroughRouter, RequestView, Router as RouteDecider},
     stream::{Observed, ResponseInfo, Tap},
 };
@@ -62,8 +64,8 @@ impl Proxy {
         self
     }
 
-    /// Replaces the default [`PassthroughRouter`]. Decisions are only logged for now: the body is
-    /// forwarded as received.
+    /// Replaces the default [`PassthroughRouter`]. Its decision is applied to `/v1/messages`
+    /// requests (see [`crate::rewrite`]).
     pub fn with_router(mut self, router: Arc<dyn RouteDecider>) -> Self {
         self.router = router;
         self
@@ -73,40 +75,62 @@ impl Proxy {
         Router::new().fallback(forward).with_state(self)
     }
 
-    /// `model` is filled with the requested model, if the body names one, for the request log.
-    async fn forward(
-        &self,
-        req: Request,
-        model: &mut Option<String>,
-    ) -> Result<Response, ForwardError> {
+    /// Asks the router about a `/v1/messages` request and applies its decision to `body`. Returns
+    /// `None` when the request is not routed (other path, unreadable body, background request).
+    /// Never fails: whatever goes wrong, the original body is forwarded.
+    async fn route(&self, headers: &HeaderMap, body: &[u8]) -> Option<Routed> {
+        let view = RequestView::parse(headers, body)?;
+        if let Some(kind) = background_kind(&view) {
+            tracing::debug!(kind = kind.as_str(), "background request, not routed");
+            return None;
+        }
+        let decision = self.router.decide(&view).await;
+        tracing::debug!(
+            model = %decision.model,
+            effort = ?decision.effort,
+            source = ?decision.source,
+            reason = %decision.reason,
+            "routing decision"
+        );
+        let body = match rewrite::apply(body, &decision) {
+            Ok(body) => body,
+            Err(err) => {
+                tracing::warn!(error = %err, "cannot apply routing decision, forwarding unchanged");
+                None
+            }
+        };
+        Some(Routed {
+            model: decision.model,
+            reason: decision.reason,
+            body,
+        })
+    }
+
+    /// `log` is filled in for the request log: the requested model, if the body names one, and
+    /// the routing outcome.
+    async fn forward(&self, req: Request, log: &mut RequestLog) -> Result<Response, ForwardError> {
         let (parts, body) = req.into_parts();
         let path_and_query = parts.uri.path_and_query().map_or("/", |pq| pq.as_str());
         let url = format!("{}{}", self.upstream, path_and_query);
-        let body = to_bytes(body, MAX_REQUEST_BODY)
+        let mut body = to_bytes(body, MAX_REQUEST_BODY)
             .await
             .map_err(|_| ForwardError::Body)?;
-        *model = requested_model(&body);
+        log.model = requested_model(&body);
+        let mut headers = strip_hop_by_hop(&parts.headers);
         if parts.method == Method::POST && parts.uri.path() == "/v1/messages" {
-            if let Some(view) = RequestView::parse(&parts.headers, &body) {
-                if let Some(kind) = background_kind(&view) {
-                    tracing::debug!(kind = kind.as_str(), "background request, not routed");
-                } else {
-                    let decision = self.router.decide(&view).await;
-                    tracing::debug!(
-                        model = %decision.model,
-                        effort = ?decision.effort,
-                        source = ?decision.source,
-                        reason = %decision.reason,
-                        "routing decision"
-                    );
+            if let Some(routed) = self.route(&parts.headers, &body).await {
+                if let Some(new_body) = routed.body {
+                    headers.insert(header::CONTENT_LENGTH, new_body.len().into());
+                    body = new_body.into();
                 }
+                log.routed = Some((routed.model, routed.reason));
             }
         }
 
         let mut request = self
             .client
             .request(parts.method.clone(), url)
-            .headers(strip_hop_by_hop(&parts.headers));
+            .headers(headers);
         if !body.is_empty() {
             request = request.body(body);
         }
@@ -142,20 +166,46 @@ async fn forward(State(proxy): State<Proxy>, req: Request) -> Response {
     let started = Instant::now();
     let method = req.method().clone();
     let path = req.uri().path().to_owned();
-    let mut model = None;
+    let mut log = RequestLog::default();
     let response = proxy
-        .forward(req, &mut model)
+        .forward(req, &mut log)
         .await
         .unwrap_or_else(IntoResponse::into_response);
+    let (routed, reason) = match &log.routed {
+        Some((model, reason)) => (
+            plausible_model(model).then_some(model.as_str()),
+            Some(reason.as_str()),
+        ),
+        None => (None, None),
+    };
     tracing::info!(
         %method,
         %path,
         status = response.status().as_u16(),
         ms = started.elapsed().as_millis() as u64,
-        model = %model.as_deref().unwrap_or("-"),
+        model = %log.model.as_deref().unwrap_or("-"),
+        routed = %routed.unwrap_or("-"),
+        reason = %reason.unwrap_or("-"),
         "request"
     );
     response
+}
+
+/// What the request log says about one request.
+#[derive(Default)]
+struct RequestLog {
+    /// The model Claude Code asked for.
+    model: Option<String>,
+    /// Model and reason of the routing decision. `None` if the request was not routed.
+    routed: Option<(String, String)>,
+}
+
+/// The outcome of routing one request.
+struct Routed {
+    model: String,
+    reason: String,
+    /// The rewritten body, if the decision changed anything.
+    body: Option<Vec<u8>>,
 }
 
 /// The top-level `model` of a JSON body, if it looks like a model id. Anything else (no JSON,
@@ -166,12 +216,15 @@ fn requested_model(body: &[u8]) -> Option<String> {
         model: Option<String>,
     }
     let model = serde_json::from_slice::<Peek>(body).ok()?.model?;
-    let plausible = !model.is_empty()
+    plausible_model(&model).then_some(model)
+}
+
+fn plausible_model(model: &str) -> bool {
+    !model.is_empty()
         && model.len() <= 100
         && model
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '@'));
-    plausible.then_some(model)
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '@'))
 }
 
 enum ForwardError {

@@ -218,7 +218,7 @@ async fn serve(router: Router) -> std::net::SocketAddr {
 }
 
 #[tokio::test]
-async fn proxy_asks_the_router_only_for_messages_and_forwards_the_body_unchanged() {
+async fn proxy_asks_the_router_only_for_messages_and_forwards_everything_else_unchanged() {
     let received = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
     let sink = received.clone();
     let upstream = serve(
@@ -259,8 +259,117 @@ async fn proxy_asks_the_router_only_for_messages_and_forwards_the_body_unchanged
 
     assert_eq!(*asked.lock().unwrap(), ["claude-opus-5-5"]);
     let received = received.lock().unwrap();
-    assert_eq!(received[0], body.as_bytes());
+    // The recorder routes to Haiku, so only the model changes in the one routed request.
+    assert_eq!(
+        received[0],
+        body.replace("claude-opus-5-5", "claude-haiku-5-5")
+            .as_bytes()
+    );
+    assert_eq!(received[1], body.as_bytes());
     assert_eq!(received.len(), 4);
+}
+
+/// Always answers with the same decision.
+struct Fixed(RoutingDecision);
+
+impl RouteDecider for Fixed {
+    fn decide<'a>(&'a self, _: &'a RequestView) -> BoxFuture<'a, RoutingDecision> {
+        Box::pin(async move { self.0.clone() })
+    }
+}
+
+/// Sends `body` to `/v1/messages` through a proxy whose router always gives `decision`. Returns
+/// what the upstream received: its body and its `content-length`.
+async fn send_routed(body: Vec<u8>, decision: RoutingDecision) -> (Vec<u8>, Option<usize>) {
+    let received = Arc::new(Mutex::new(None));
+    let sink = received.clone();
+    let upstream = serve(Router::new().fallback(any(
+        move |headers: HeaderMap, body: axum::body::Bytes| async move {
+            let length = headers
+                .get("content-length")
+                .and_then(|v| v.to_str().ok()?.parse().ok());
+            *sink.lock().unwrap() = Some((body.to_vec(), length));
+            "ok"
+        },
+    )))
+    .await;
+    let proxy = Proxy::new(&format!("http://{upstream}"))
+        .unwrap()
+        .with_router(Arc::new(Fixed(decision)));
+    let proxy_addr = serve(proxy.router()).await;
+    reqwest::Client::new()
+        .post(format!("http://{proxy_addr}/v1/messages?beta=true"))
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    let received = received.lock().unwrap().take().unwrap();
+    received
+}
+
+#[tokio::test]
+async fn routed_requests_differ_only_in_model_and_effort() {
+    let decision = RoutingDecision {
+        model: "claude-haiku-5-5".into(),
+        effort: Some(Effort::Low),
+        reason: "test".into(),
+        source: DecisionSource::Rules,
+    };
+    for fixture in fixtures() {
+        let (sent, length) = send_routed(fixture.body.clone(), decision.clone()).await;
+        assert_eq!(length, Some(sent.len()), "{}", fixture.name);
+        if fixture.kind.starts_with("background_") {
+            assert_eq!(sent, fixture.body, "{} is background", fixture.name);
+            continue;
+        }
+
+        let mut expected: Value = serde_json::from_slice(&fixture.body).unwrap();
+        expected["model"] = json!("claude-haiku-5-5");
+        if expected["output_config"]["effort"].is_string() {
+            expected["output_config"]["effort"] = json!("low");
+        }
+        let last_effort = expected["messages"].as_array_mut().and_then(|messages| {
+            messages
+                .iter_mut()
+                .rev()
+                .find(|m| m["role"] == "system" && m["output_config"]["effort"].is_string())
+        });
+        if let Some(message) = last_effort {
+            message["output_config"]["effort"] = json!("low");
+        }
+        let actual: Value = serde_json::from_slice(&sent).unwrap();
+        assert_eq!(actual, expected, "{}", fixture.name);
+    }
+}
+
+#[tokio::test]
+async fn routing_to_the_same_model_and_effort_forwards_the_original_bytes() {
+    let body = br#"{"model":"claude-opus-5-5",  "max_tokens":1e3,
+ "output_config":{"effort":"xhigh"}, "messages":[{"role":"user","content":"hi"}]}"#
+        .to_vec();
+    let decision = RoutingDecision {
+        model: "claude-opus-5-5".into(),
+        effort: Some(Effort::Xhigh),
+        reason: "test".into(),
+        source: DecisionSource::Rules,
+    };
+    let (sent, length) = send_routed(body.clone(), decision).await;
+    assert_eq!(sent, body);
+    assert_eq!(length, Some(body.len()));
+}
+
+#[tokio::test]
+async fn unexpected_body_shapes_are_forwarded_unchanged() {
+    let decision = RoutingDecision {
+        model: "claude-haiku-5-5".into(),
+        effort: Some(Effort::Low),
+        reason: "test".into(),
+        source: DecisionSource::Rules,
+    };
+    // `output_config` is not an object: the request cannot be routed and goes through as is.
+    let body = br#"{"model":"claude-opus-5-5","messages":[],"output_config":"odd"}"#.to_vec();
+    let (sent, _) = send_routed(body.clone(), decision).await;
+    assert_eq!(sent, body);
 }
 
 #[test]

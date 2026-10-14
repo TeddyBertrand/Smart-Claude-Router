@@ -72,6 +72,8 @@ async fn request_log_has_metadata_but_no_secrets() {
         "path=/v1/messages",
         "status=200",
         "model=claude-opus-5-5",
+        "routed=claude-opus-5-5",
+        "reason=passthrough",
     ] {
         assert!(
             logs.contains(expected),
