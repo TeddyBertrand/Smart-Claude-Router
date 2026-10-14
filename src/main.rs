@@ -83,6 +83,9 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     }
     tracing::debug!(?config, "effective config");
 
+    // Before the port opens: once something can connect, Ctrl+C / SIGTERM must already be caught.
+    let shutdown = shutdown_signal();
+
     let listener = TcpListener::bind(config.listen).await.map_err(|err| {
         let hint = match err.kind() {
             io::ErrorKind::AddrInUse => " (is another smart-claude-router already running?)",
@@ -116,7 +119,7 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
 
     tokio::select! {
         result = &mut server => return result.context("server stopped"),
-        () = shutdown_signal() => {}
+        () = shutdown => {}
     }
     tracing::info!(
         "shutting down, waiting up to {}s for answers in progress",
@@ -155,24 +158,29 @@ fn init_logging(level: Option<LogLevel>) {
         .init();
 }
 
-async fn shutdown_signal() {
-    let interrupt = async {
-        let _ = tokio::signal::ctrl_c().await;
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        use tokio::signal::unix::{signal, SignalKind};
-        match signal(SignalKind::terminate()) {
-            Ok(mut sigterm) => {
-                sigterm.recv().await;
+/// Resolves on Ctrl+C or SIGTERM. The handlers are installed when this is called, not when the
+/// future is first polled, so a signal that arrives right after the port opens is not lost.
+#[cfg(unix)]
+fn shutdown_signal() -> impl std::future::Future<Output = ()> {
+    use tokio::signal::unix::{signal, SignalKind};
+    let interrupt = signal(SignalKind::interrupt());
+    let terminate = signal(SignalKind::terminate());
+    async move {
+        match (interrupt, terminate) {
+            (Ok(mut interrupt), Ok(mut terminate)) => tokio::select! {
+                _ = interrupt.recv() => {}
+                _ = terminate.recv() => {}
+            },
+            _ => {
+                let _ = tokio::signal::ctrl_c().await;
             }
-            Err(_) => std::future::pending().await,
         }
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-    tokio::select! {
-        () = interrupt => {}
-        () = terminate => {}
+    }
+}
+
+#[cfg(not(unix))]
+fn shutdown_signal() -> impl std::future::Future<Output = ()> {
+    async {
+        let _ = tokio::signal::ctrl_c().await;
     }
 }
