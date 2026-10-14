@@ -103,6 +103,14 @@ fn startup_names_the_classifier_and_warns_when_it_is_not_local() {
         "{out}"
     );
     assert!(!out.contains("not on this machine"), "{out}");
+    assert!(out.contains("fallback: default tier"), "{out}");
+
+    let with_rules = write(
+        "rules.toml",
+        "router = \"classifier\"\n[rules]\nenabled = true",
+    );
+    let out = run_and_stop("classifier-rules", &["--config", &with_rules]);
+    assert!(out.contains("fallback: rules router"), "{out}");
 
     let remote = write(
         "remote.toml",
