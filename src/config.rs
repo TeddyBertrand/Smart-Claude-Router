@@ -24,7 +24,50 @@ pub struct Config {
     pub upstream: String,
     /// Tier used when routing has no better answer.
     pub default_tier: Tier,
+    /// Whether routing decisions are applied to requests or only logged.
+    pub mode: Mode,
     pub tiers: Tiers,
+    pub rules: Rules,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// Routing decisions change the request.
+    Route,
+    /// Routing decisions are logged, every request is forwarded unchanged (dry run).
+    Observe,
+}
+
+/// The rules router: an ordered checklist that maps a message to a tier.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Rules {
+    /// Off by default: requests pass through untouched until this is `true`.
+    pub enabled: bool,
+    /// Tried top to bottom; the first one that matches decides.
+    pub rule: Vec<Rule>,
+}
+
+/// One rule. Every condition it lists has to hold; conditions it leaves out are not checked.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rule {
+    /// Shown as the reason in the log.
+    pub name: String,
+    pub tier: Tier,
+    /// The message contains at least one of these words or phrases, in any letter case.
+    pub keywords: Option<Vec<String>>,
+    /// Length of your message in characters.
+    pub min_chars: Option<usize>,
+    pub max_chars: Option<usize>,
+    /// Number of messages in the conversation so far.
+    pub min_messages: Option<usize>,
+    pub max_messages: Option<usize>,
+    /// The message includes at least one image (`true`), or none (`false`).
+    pub images: Option<bool>,
+    /// The model Claude Code asked for contains this text, e.g. `haiku`.
+    pub model_contains: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -63,6 +106,19 @@ pub enum Effort {
     Max,
 }
 
+impl Effort {
+    /// The value as written in `output_config.effort`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -70,7 +126,19 @@ impl Default for Config {
             upstream: "https://api.anthropic.com".into(),
             // What Claude Code already uses on its own, so defaults change nothing.
             default_tier: Tier::High,
+            mode: Mode::Route,
             tiers: Tiers::default(),
+            rules: Rules::default(),
+        }
+    }
+}
+
+impl Tiers {
+    pub fn get(&self, tier: Tier) -> &TierModel {
+        match tier {
+            Tier::Low => &self.low,
+            Tier::Medium => &self.medium,
+            Tier::High => &self.high,
         }
     }
 }
@@ -139,6 +207,28 @@ impl Config {
                 bail!("tiers.{name}.model must not be empty");
             }
         }
+        for (i, rule) in self.rules.rule.iter().enumerate() {
+            let at = format!("rules.rule #{} ({:?})", i + 1, rule.name);
+            if rule.name.trim().is_empty() {
+                bail!("rules.rule #{}: name must not be empty", i + 1);
+            }
+            if let Some(keywords) = &rule.keywords {
+                if keywords.is_empty() || keywords.iter().any(|k| k.trim().is_empty()) {
+                    bail!("{at}: keywords must be a list of non-empty words");
+                }
+            }
+            if rule.model_contains.as_deref().is_some_and(str::is_empty) {
+                bail!("{at}: model_contains must not be empty");
+            }
+            for (low, high, name) in [
+                (rule.min_chars, rule.max_chars, "chars"),
+                (rule.min_messages, rule.max_messages, "messages"),
+            ] {
+                if low.zip(high).is_some_and(|(low, high)| low > high) {
+                    bail!("{at}: min_{name} is larger than max_{name}, so it can never match");
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -197,8 +287,76 @@ mod tests {
         assert!(err("[tiers.low]\nmodel = \"x\"\neffort = \"huge\"").contains("huge"));
         assert!(err("[tiers.low]\nmodel = \"x\"").contains("effort"));
         assert!(err("default_tier = \"top\"").contains("top"));
+        assert!(err("mode = \"watch\"").contains("watch"));
         assert!(err("listen = \"localhost\"").contains("listen"));
         assert!(err("[tiers.high]\nmodel = \" \"\neffort = \"max\"").contains("tiers.high.model"));
+    }
+
+    #[test]
+    fn mode_defaults_to_route_and_accepts_observe() {
+        assert_eq!(Config::default().mode, Mode::Route);
+        assert_eq!(
+            Config::from_toml("mode = \"observe\"").unwrap().mode,
+            Mode::Observe
+        );
+        assert_eq!(
+            Config::from_toml("mode = \"route\"").unwrap().mode,
+            Mode::Route
+        );
+    }
+
+    #[test]
+    fn rules_are_read_in_order_and_off_by_default() {
+        assert!(!Config::default().rules.enabled);
+        let config = Config::from_toml(
+            r#"
+            [rules]
+            enabled = true
+
+            [[rules.rule]]
+            name = "typos"
+            tier = "low"
+            keywords = ["typo", "rename"]
+            max_chars = 200
+
+            [[rules.rule]]
+            name = "big"
+            tier = "high"
+            min_messages = 20
+            images = false
+            model_contains = "opus"
+            "#,
+        )
+        .unwrap();
+        let rules = config.rules;
+        assert!(rules.enabled);
+        assert_eq!(rules.rule.len(), 2);
+        assert_eq!(rules.rule[0].name, "typos");
+        assert_eq!(rules.rule[0].tier, Tier::Low);
+        assert_eq!(rules.rule[0].max_chars, Some(200));
+        assert_eq!(rules.rule[1].min_messages, Some(20));
+        assert_eq!(rules.rule[1].images, Some(false));
+        assert_eq!(rules.rule[1].keywords, None);
+    }
+
+    #[test]
+    fn rule_mistakes_are_named_in_the_error() {
+        let rule = |body: &str| err(&format!("[[rules.rule]]\n{body}"));
+        assert!(rule("name = \"a\"").contains("tier"));
+        assert!(rule("tier = \"low\"").contains("name"));
+        assert!(rule("name = \"a\"\ntier = \"low\"\nkeyword = [\"x\"]").contains("keyword"));
+        assert!(rule("name = \"a\"\ntier = \"top\"").contains("top"));
+        assert!(rule("name = \" \"\ntier = \"low\"").contains("name must not be empty"));
+        assert!(rule("name = \"a\"\ntier = \"low\"\nkeywords = []").contains("keywords"));
+        assert!(rule("name = \"a\"\ntier = \"low\"\nkeywords = [\"\"]").contains("keywords"));
+        assert!(
+            rule("name = \"a\"\ntier = \"low\"\nmin_chars = 9\nmax_chars = 1")
+                .contains("min_chars is larger than max_chars")
+        );
+        assert!(
+            rule("name = \"a\"\ntier = \"low\"\nmin_messages = 9\nmax_messages = 1")
+                .contains("min_messages is larger than max_messages")
+        );
     }
 
     #[test]

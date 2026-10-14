@@ -16,6 +16,12 @@ upstream = "https://api.anthropic.com"
 # "high" matches what Claude Code uses by default, so nothing changes until you lower it.
 default_tier = "high"
 
+# "route": routing decisions change your requests.
+# "observe": dry run. Decisions are computed and logged ("dry run: would route"), but every
+# request is forwarded exactly as Claude Code sent it. `--dry-run` on the command line does
+# the same and wins over this setting.
+mode = "route"
+
 # The models the router chooses between (routing arrives in v0.2.0).
 # effort: "low", "medium", "high", "xhigh" or "max".
 # A tier you write here needs both model and effort; tiers you leave out keep these values.
@@ -31,3 +37,36 @@ effort = "high"
 [tiers.high]
 model = "claude-opus-5-5"
 effort = "xhigh"
+
+# The rules router (see docs/rules.md). Off by default: with enabled = false every request
+# is forwarded unchanged and the rules below are ignored.
+#
+# For each new message you send, the router picks a tier:
+#   1. an override marker in your message wins: !low, !medium or !high
+#   2. otherwise the first rule below that matches, top to bottom
+#   3. otherwise default_tier
+#
+# A rule matches when every condition it lists is true. Conditions you leave out are not checked.
+# Rules are written as [[rules.rule]] blocks. Examples (uncomment and change):
+#
+# [[rules.rule]]
+# name = "small-fix"                       # shown as the reason in the log
+# tier = "low"                             # "low", "medium" or "high"
+# keywords = ["typo", "rename", "format"]  # message contains any of these (any letter case)
+# max_chars = 300                          # message is at most this many characters
+#
+# [[rules.rule]]
+# name = "big-design"
+# tier = "high"
+# keywords = ["architecture", "redesign", "refactor"]
+#
+# [[rules.rule]]
+# name = "screenshot"
+# tier = "medium"
+# images = true                            # the message includes an image
+#
+# Other conditions: min_chars, min_messages, max_messages (messages so far in the conversation)
+# and model_contains (the model Claude Code asked for contains this text, e.g. "haiku").
+
+[rules]
+enabled = false

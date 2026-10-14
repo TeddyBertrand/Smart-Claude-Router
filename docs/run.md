@@ -25,6 +25,7 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8899 claude
 |---|---|
 | `--config <PATH>` | Use this config file instead of `~/.config/smart-claude-router/config.toml`. The file must exist. |
 | `--listen <IP:PORT>` | Listen on this address instead of the one in the config file. |
+| `--dry-run` | Log what the router would choose, but forward every request unchanged. See [dry run](dry-run.md). |
 | `--log-level <LEVEL>` | How much to print: `error`, `warn`, `info` (default), `debug` or `trace`. |
 
 Options win over the config file, and the config file wins over the built-in defaults.
@@ -34,7 +35,7 @@ Options win over the config file, and the config file wins over the built-in def
 At start, it says which config file it used and where it listens. Then one line per request:
 
 ```
-INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=200 ms=638 model=claude-opus-5-5
+INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=200 ms=638 model=claude-opus-5-5 routed=claude-opus-5-5 reason=passthrough
 ```
 
 - `method` and `path`: what Claude Code asked for.
@@ -43,6 +44,10 @@ INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=20
 - `ms`: how long Anthropic took to start answering. The answer itself can keep streaming after
   that.
 - `model`: the model Claude Code asked for, or `-` when the request names none.
+- `routed`: the model the router chose, which is the one Anthropic received. It is `-` when the
+  router was not asked, for example for other paths and for the background requests described
+  in [The router](router.md).
+- `reason`: why the router chose it, or `-` when `routed` is `-`.
 
 With `--log-level debug` it also prints the full settings it is using.
 

@@ -2,5 +2,9 @@
 //! the Claude model and effort per request. Today it is a transparent passthrough.
 
 pub mod config;
+pub mod conversation;
 pub mod proxy;
+pub mod rewrite;
+pub mod router;
+pub mod rules;
 pub mod stream;
