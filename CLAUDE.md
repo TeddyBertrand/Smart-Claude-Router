@@ -8,8 +8,9 @@ Quota-saving router for Claude Code: a local HTTP proxy that Claude Code talks t
 `ANTHROPIC_BASE_URL`, which picks the Claude model and effort level per request (rules first,
 later a small local model via Ollama) and forwards to the Anthropic API.
 
-Status: v0.1.0 in progress. The proxy is a transparent passthrough with live streaming
-(#7, #8); no routing yet. The roadmap lives in GitHub milestones v0.1.0–v0.4.0 (issues #6–#25).
+Status: v0.2.0. The proxy streams live and has rule-based routing (opt-in via `[rules] enabled`,
+dry run via `--dry-run`); the local-model classifier is v0.3.0. The roadmap lives in GitHub
+milestones v0.1.0–v0.4.0 (issues #6–#25).
 Before touching request handling, read `docs/spike-request-shape.md` (#6: the real Claude Code
 request shape, captured with subscription auth); redacted request fixtures with an `expect`
 label are in `tests/fixtures/requests/`.
@@ -37,6 +38,37 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   that sees each forwarded chunk (still compressed) and one `StreamEnd`. `ClientGone` is detected
   in `Drop` of the wrapped body, which is also what cancels the upstream request. HEAD responses
   are never observed. Nothing in production installs a tap yet (#24 will).
+- `src/router.rs`: `Router` trait (`decide(&RequestView) -> BoxFuture<RoutingDecision>`, boxed so it
+  is `dyn`-safe), `RequestView::parse(headers, body) -> Option<_>` (`None` = unparseable → not
+  routed, forwarded as is), `RoutingDecision { model, effort, reason, source }`,
+  `PassthroughRouter` (default). `Proxy::with_router` swaps it. The proxy asks the router only for
+  `POST /v1/messages`. `RequestView`'s
+  `Debug` hides `last_user_text`. `src/rewrite.rs` `apply(body, &decision)` applies the decision
+  by splicing raw JSON (`serde_json` `raw_value`; never re-serialize the whole body, the rest must
+  stay byte for byte): `model`, top-level `output_config.effort`, and `output_config.effort` of the
+  latest system message that has one; effort is never added where absent. `Ok(None)` = forward
+  original, `Err` = warn and forward original. The proxy resets `content-length` after a rewrite
+  and the info log line carries `model` (requested), `routed` and `reason`. `background_kind` (quota probe = `max_tokens == 1`, title =
+  `output_config.format`) is checked before `decide`; matches skip the router. Compaction is
+  deliberately not background. `RequestView::turn` (`Turn::New`/`Continuation`) implements the
+  spike's rule. `src/conversation.rs` `Conversations` (owned by `Proxy`, key = session id + agent
+  id, 1 h idle TTL, 1024 entries LRU, in memory only) turns that into a `Plan`: `Decide` (new
+  turn, ask the router and `remember`), `Reuse` (continuation, stored decision, reason prefixed
+  `same turn:`), `Skip` (continuation with nothing stored, e.g. after a restart: forward
+  unchanged, never route mid-turn).
+- `src/rules.rs`: `RulesRouter::new(&Config)` (`Router`, source `Rules`). Order: override marker
+  (`!low`/`!medium`/`!high` as a whitespace-separated word of `last_user_text`, last one wins) >
+  first matching `[[rules.rule]]` (all listed conditions must hold; `keywords` any-of, case
+  insensitive; char/message ranges; `images`; `model_contains`) > `default_tier`. Reasons are
+  `override !x` / `rule <name>` / `no rule matched, default tier`, never message text. Config
+  `[rules] enabled` defaults to **false**; `main.rs` installs the router only when true (a
+  no-match decision is `default_tier`, which could upgrade a user on a cheaper model, so it is
+  opt-in). Rules are validated in `Config::validate`.
+- Dry run: `Config.mode` (`route` default / `observe`), `run --dry-run` wins over the file.
+  `Proxy::with_dry_run(true)` runs the whole pipeline, logs `dry run: would route` at `info`
+  (`requested`, `would_route`, `effort`, `reason`, `turn`) and forwards the original bytes; the
+  request line then has `routed=-`. `main.rs` prints the mode at startup and warns when observing
+  with rules off.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed

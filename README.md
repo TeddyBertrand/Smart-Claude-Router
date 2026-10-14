@@ -4,8 +4,10 @@ A small proxy that sits between Claude Code and Anthropic. The goal is to let it
 Claude model or a lower effort level when a request doesn't need more, so your subscription quota
 lasts longer.
 
-**Status: v0.1.0.** The proxy forwards everything unchanged and shows one log line per request.
-It does not choose models yet, so it doesn't save quota yet. Routing comes in v0.2.0.
+**Status: v0.2.0.** The proxy can choose a cheaper model and effort for easy messages, using
+rules you write in the config file. This is off by default: until you turn on the
+[rules router](docs/rules.md), everything is forwarded unchanged. You can try it first with
+[dry run](docs/dry-run.md), which only logs what it would choose.
 
 ## Quick start
 
@@ -47,6 +49,10 @@ Rust for this.
 - [Setup guide](docs/setup.md): installing, starting automatically at login, troubleshooting,
   and removing everything.
 - [The proxy](docs/proxy.md): what it does and what it never does.
+- [The router](docs/router.md): how the model and effort for a request get decided.
+- [The rules router](docs/rules.md): choose a cheaper model for easy messages, with `!low` and
+  `!high` overrides.
+- [Dry run](docs/dry-run.md): see what the router would choose before it changes anything.
 - [Running it](docs/run.md): options, logs, stopping.
 - [The config file](docs/config.md): every setting.
 
