@@ -3,12 +3,13 @@ use std::{
     io::{self, IsTerminal},
     net::SocketAddr,
     path::PathBuf,
+    sync::Arc,
     time::Duration,
 };
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use smart_claude_router::{config::Config, proxy::Proxy};
+use smart_claude_router::{config::Config, proxy::Proxy, rules::RulesRouter};
 use tokio::{net::TcpListener, sync::oneshot};
 use tracing_subscriber::EnvFilter;
 
@@ -81,10 +82,16 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
     tracing::info!("proxying http://{} -> {}", config.listen, config.upstream);
 
     let (stop, stopped) = oneshot::channel::<()>();
-    let server = axum::serve(listener, Proxy::new(&config.upstream)?.router())
-        .with_graceful_shutdown(async {
-            let _ = stopped.await;
-        });
+    let mut proxy = Proxy::new(&config.upstream)?;
+    if config.rules.enabled {
+        tracing::info!("routing: rules ({} configured)", config.rules.rule.len());
+        proxy = proxy.with_router(Arc::new(RulesRouter::new(&config)));
+    } else {
+        tracing::info!("routing: off, requests are forwarded unchanged");
+    }
+    let server = axum::serve(listener, proxy.router()).with_graceful_shutdown(async {
+        let _ = stopped.await;
+    });
     let mut server = std::pin::pin!(server.into_future());
 
     tokio::select! {
