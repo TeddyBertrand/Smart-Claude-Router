@@ -15,7 +15,7 @@ use std::{
 use anyhow::{bail, Context};
 use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// Address the proxy listens on. Keep it on localhost: the proxy forwards your login.
@@ -62,17 +62,23 @@ pub struct Rules {
 }
 
 /// The classifier: a local model (Ollama) that grades each new message, and what it is shown.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Classifier {
     /// Where Ollama listens. Keep it on this machine: your messages are sent there.
     pub url: String,
     /// The Ollama model that grades messages.
     pub model: String,
-    /// Longest wait for the model's answer, in milliseconds. After that the default tier is used.
+    /// Longest wait for the model's answer, in milliseconds. After that the fallback decides.
     pub timeout_ms: u64,
     /// How long Ollama keeps the model loaded after a call (`"30m"`, `"-1"` for always).
     pub keep_alive: String,
+    /// Answers with a lower confidence (0 to 1) are not used: the fallback decides instead.
+    pub min_confidence: f64,
+    /// After this many failures in a row the classifier is not called for `cooldown_secs`.
+    pub failure_limit: u32,
+    /// How long the classifier is left alone after `failure_limit` failures in a row.
+    pub cooldown_secs: u64,
     /// Most characters of your message the classifier sees. Longer messages keep their start and
     /// end.
     pub max_chars: usize,
@@ -87,6 +93,9 @@ impl Default for Classifier {
             model: "qwen2.5:3b".into(),
             timeout_ms: 500,
             keep_alive: "30m".into(),
+            min_confidence: 0.5,
+            failure_limit: 3,
+            cooldown_secs: 30,
             max_chars: 600,
             prompt_file: None,
         }
@@ -270,6 +279,15 @@ impl Config {
         }
         if self.classifier.keep_alive.trim().is_empty() {
             bail!("classifier.keep_alive must not be empty");
+        }
+        if !(0.0..=1.0).contains(&self.classifier.min_confidence) {
+            bail!("classifier.min_confidence must be between 0 and 1");
+        }
+        if self.classifier.failure_limit == 0 {
+            bail!("classifier.failure_limit must be at least 1");
+        }
+        if self.classifier.cooldown_secs == 0 {
+            bail!("classifier.cooldown_secs must be at least 1");
         }
         if self.classifier.max_chars < 20 {
             bail!("classifier.max_chars must be at least 20");
@@ -463,6 +481,25 @@ mod tests {
         assert!(err("[classifier]\nmodel = \" \"").contains("classifier.model"));
         assert!(err("[classifier]\ntimeout_ms = 0").contains("classifier.timeout_ms"));
         assert!(err("[classifier]\nkeep_alive = \"\"").contains("classifier.keep_alive"));
+
+        let fallback = Config::from_toml(
+            "[classifier]\nmin_confidence = 0.7\nfailure_limit = 5\ncooldown_secs = 60",
+        )
+        .unwrap()
+        .classifier;
+        assert_eq!(
+            (
+                fallback.min_confidence,
+                fallback.failure_limit,
+                fallback.cooldown_secs
+            ),
+            (0.7, 5, 60)
+        );
+        assert!(err("[classifier]\nmin_confidence = 1.5").contains("classifier.min_confidence"));
+        assert!(err("[classifier]\nmin_confidence = -0.1").contains("classifier.min_confidence"));
+        assert!(err("[classifier]\nmin_confidence = nan").contains("classifier.min_confidence"));
+        assert!(err("[classifier]\nfailure_limit = 0").contains("classifier.failure_limit"));
+        assert!(err("[classifier]\ncooldown_secs = 0").contains("classifier.cooldown_secs"));
         assert!(err("[classifier]\nprompt_file = \"\"").contains("classifier.prompt_file"));
         assert!(err("[classifier]\nmax_char = 50").contains("max_char"));
     }
