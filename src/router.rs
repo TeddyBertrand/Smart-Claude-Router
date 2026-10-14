@@ -100,6 +100,35 @@ impl Router for PassthroughRouter {
     }
 }
 
+/// Where a request sits in a user turn. One turn is one message from the user and every request
+/// Claude Code makes to answer it: after each tool call it sends the result back as a new request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Turn {
+    /// The user just wrote something (text or images).
+    New,
+    /// Claude Code is sending tool results back inside a turn that already started.
+    Continuation,
+}
+
+/// Trailing `role: "system"` messages are skipped. If the last message left is a user message
+/// made only of `tool_result` blocks, the request continues a turn. Anything else, including
+/// text mixed with tool results, an image, or no messages at all, starts a new one.
+fn turn_of(messages: &[Message]) -> Turn {
+    let last = messages.iter().rev().find(|m| m.role != "system");
+    match last {
+        Some(Message {
+            role,
+            content: Content::Blocks(blocks),
+        }) if role == "user"
+            && !blocks.is_empty()
+            && blocks.iter().all(|b| b.kind == "tool_result") =>
+        {
+            Turn::Continuation
+        }
+        _ => Turn::New,
+    }
+}
+
 /// Read-only summary of one `POST /v1/messages` request.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RequestView {
@@ -118,6 +147,8 @@ pub struct RequestView {
     /// message only holds tool results, which is how a continuation looks. Kept in memory for
     /// the routing decision only; `Debug` hides it.
     pub last_user_text: String,
+    /// Whether this request starts a user turn or continues one (see [`Turn`]).
+    pub turn: Turn,
     /// Any `tool_use` block in `messages`.
     pub has_tool_use: bool,
     /// Number of tools declared in the request's `tools`.
@@ -174,6 +205,7 @@ impl RequestView {
             agent_id: header(AGENT_HEADER),
             message_count: raw.messages.len(),
             last_user_text,
+            turn: turn_of(&raw.messages),
             has_tool_use,
             tool_count: raw.tools.len(),
             image_count,
@@ -194,6 +226,7 @@ impl fmt::Debug for RequestView {
             .field("agent_id", &self.agent_id)
             .field("message_count", &self.message_count)
             .field("last_user_text_chars", &self.last_user_text.chars().count())
+            .field("turn", &self.turn)
             .field("has_tool_use", &self.has_tool_use)
             .field("tool_count", &self.tool_count)
             .field("image_count", &self.image_count)
