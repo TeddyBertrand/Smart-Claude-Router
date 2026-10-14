@@ -6,4 +6,5 @@ pub mod conversation;
 pub mod proxy;
 pub mod rewrite;
 pub mod router;
+pub mod rules;
 pub mod stream;
