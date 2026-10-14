@@ -110,6 +110,15 @@ pub enum Turn {
     Continuation,
 }
 
+impl Turn {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::New => "new",
+            Self::Continuation => "continuation",
+        }
+    }
+}
+
 /// Trailing `role: "system"` messages are skipped. If the last message left is a user message
 /// made only of `tool_result` blocks, the request continues a turn. Anything else, including
 /// text mixed with tool results, an image, or no messages at all, starts a new one.

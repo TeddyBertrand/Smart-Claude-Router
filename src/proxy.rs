@@ -41,6 +41,7 @@ pub struct Proxy {
     tap: Option<Arc<dyn Tap>>,
     router: Arc<dyn RouteDecider>,
     conversations: Arc<Conversations>,
+    dry_run: bool,
 }
 
 impl Proxy {
@@ -58,7 +59,15 @@ impl Proxy {
             tap: None,
             router: Arc::new(PassthroughRouter),
             conversations: Arc::default(),
+            dry_run: false,
         })
+    }
+
+    /// In dry-run mode the whole routing pipeline runs and each decision is logged, but every
+    /// request is forwarded exactly as received.
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.dry_run = dry_run;
+        self
     }
 
     /// Lets `tap` observe every response body as it streams (see [`crate::stream`]).
@@ -109,6 +118,17 @@ impl Proxy {
             reason = %decision.reason,
             "routing decision"
         );
+        if self.dry_run {
+            tracing::info!(
+                requested = %loggable_model(&view.model),
+                would_route = %loggable_model(&decision.model),
+                effort = %decision.effort.map_or("-", |e| e.as_str()),
+                reason = %decision.reason,
+                turn = %view.turn.as_str(),
+                "dry run: would route"
+            );
+            return None;
+        }
         let body = match rewrite::apply(body, &decision) {
             Ok(body) => body,
             Err(err) => {
@@ -242,6 +262,15 @@ fn plausible_model(model: &str) -> bool {
         && model
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '@'))
+}
+
+/// `model` if it looks like a model id, else `-`, so logs never carry arbitrary text.
+fn loggable_model(model: &str) -> &str {
+    if plausible_model(model) {
+        model
+    } else {
+        "-"
+    }
 }
 
 enum ForwardError {

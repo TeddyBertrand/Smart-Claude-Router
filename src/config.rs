@@ -24,8 +24,19 @@ pub struct Config {
     pub upstream: String,
     /// Tier used when routing has no better answer.
     pub default_tier: Tier,
+    /// Whether routing decisions are applied to requests or only logged.
+    pub mode: Mode,
     pub tiers: Tiers,
     pub rules: Rules,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// Routing decisions change the request.
+    Route,
+    /// Routing decisions are logged, every request is forwarded unchanged (dry run).
+    Observe,
 }
 
 /// The rules router: an ordered checklist that maps a message to a tier.
@@ -115,6 +126,7 @@ impl Default for Config {
             upstream: "https://api.anthropic.com".into(),
             // What Claude Code already uses on its own, so defaults change nothing.
             default_tier: Tier::High,
+            mode: Mode::Route,
             tiers: Tiers::default(),
             rules: Rules::default(),
         }
@@ -275,8 +287,22 @@ mod tests {
         assert!(err("[tiers.low]\nmodel = \"x\"\neffort = \"huge\"").contains("huge"));
         assert!(err("[tiers.low]\nmodel = \"x\"").contains("effort"));
         assert!(err("default_tier = \"top\"").contains("top"));
+        assert!(err("mode = \"watch\"").contains("watch"));
         assert!(err("listen = \"localhost\"").contains("listen"));
         assert!(err("[tiers.high]\nmodel = \" \"\neffort = \"max\"").contains("tiers.high.model"));
+    }
+
+    #[test]
+    fn mode_defaults_to_route_and_accepts_observe() {
+        assert_eq!(Config::default().mode, Mode::Route);
+        assert_eq!(
+            Config::from_toml("mode = \"observe\"").unwrap().mode,
+            Mode::Observe
+        );
+        assert_eq!(
+            Config::from_toml("mode = \"route\"").unwrap().mode,
+            Mode::Route
+        );
     }
 
     #[test]

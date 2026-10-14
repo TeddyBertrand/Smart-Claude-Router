@@ -16,6 +16,12 @@ upstream = "https://api.anthropic.com"
 # "high" matches what Claude Code uses by default, so nothing changes until you lower it.
 default_tier = "high"
 
+# "route": routing decisions change your requests.
+# "observe": dry run. Decisions are computed and logged ("dry run: would route"), but every
+# request is forwarded exactly as Claude Code sent it. `--dry-run` on the command line does
+# the same and wins over this setting.
+mode = "route"
+
 # The models the router chooses between (routing arrives in v0.2.0).
 # effort: "low", "medium", "high", "xhigh" or "max".
 # A tier you write here needs both model and effort; tiers you leave out keep these values.
