@@ -51,10 +51,23 @@ With `--log-level debug`, each one logs `background request, not routed` and its
 Compaction (`/compact`) is not on this list. It looks the same as a normal message, so it is
 treated as one: it stays on the model the conversation already uses.
 
+## What changes in a request
+
+When the router chooses a different model or effort than Claude Code asked for, the proxy edits
+the request before sending it on:
+
+- the model is replaced
+- the effort is replaced where the request already has one. Claude Code writes the effort in two
+  places: once for the whole request, and once on the latest system note in the conversation.
+  Both are set to the same value. If a request has no effort, none is added.
+
+Everything else is left alone, including how Claude thinks (`thinking`). If the router chooses
+what the request already has, nothing is edited and the request goes out as Claude Code sent it.
+
 ## What it never does
 
-- It never changes your request. For now the answer is only written to the debug log. Applying
-  it comes with #13.
+- It never changes anything in your request except the model and the effort (see below). Every
+  other byte of the request is sent to Anthropic exactly as Claude Code wrote it.
 - It never blocks or fails a request. A request whose body can't be read as a Claude message,
   such as invalid JSON or no `model`, skips the router and is forwarded exactly as received.
 - It is only asked about `POST /v1/messages`. Every other path goes straight through.
@@ -62,14 +75,19 @@ treated as one: it stays on the model the conversation already uses.
 
 ## How to use it and turn it off
 
-Nothing to configure. The passthrough router is always on and changes nothing. To see its
-answers, start the proxy with `--log-level debug`. Each `/v1/messages` request then logs one
-extra `routing decision` line with the model, effort, source and reason.
+Nothing to configure. The passthrough router is always on and changes nothing. Every request
+line in the log shows the model Claude Code asked for (`model`), the model the router chose
+(`routed`) and why (`reason`). With `--log-level debug`, each `/v1/messages` request also logs a
+`routing decision` line with the effort and who decided.
 
 ## When something fails
 
 If a request can't be summarised, nothing is logged for it and Claude Code gets its answer as
 if the router did not exist.
+
+If the router has decided but the request can't be edited, for example because `output_config`
+has an unexpected shape, the proxy logs a warning and forwards the request exactly as received.
+Claude Code never sees an error from this.
 
 ## For developers
 
@@ -89,7 +107,17 @@ The code lives in `src/router.rs`:
 (`max_tokens == 1`) and title generation (`output_config.format` present). The proxy calls it
 before `decide` and skips the router when it returns `Some`. Add new background kinds there.
 
-Turn detection (new turn or continuation, #14) is not done here. The view carries what it needs:
+`src/rewrite.rs` has `apply(body, &RoutingDecision) -> Result<Option<Vec<u8>>>`. `Some` is the
+new body, `None` means "send the original bytes", `Err` means an unexpected shape (the proxy
+warns and sends the original). It splices raw JSON text: each top-level value is kept as its
+original text and only the changed values are written again, so numbers, escapes and key order
+are never reformatted. The proxy then sets `content-length` to the new size. The per-message
+effort is changed on the latest `role: "system"` message that has `output_config.effort`; older
+ones are history and stay as they are.
+
+Turn detection (new turn or continuation, #14) is not done here, so a decision is applied to
+every routed request, continuations included. Today only the passthrough router exists, which
+never changes anything. The view carries what it needs:
 `last_user_text`, `has_tool_use`, `session_id` and `agent_id`.
 
 `tests/router.rs` runs `RequestView::parse` against every file in `tests/fixtures/requests/`.

@@ -41,8 +41,13 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   is `dyn`-safe), `RequestView::parse(headers, body) -> Option<_>` (`None` = unparseable → not
   routed, forwarded as is), `RoutingDecision { model, effort, reason, source }`,
   `PassthroughRouter` (default). `Proxy::with_router` swaps it. The proxy asks the router only for
-  `POST /v1/messages` and just logs the decision at `debug`; applying it is #13. `RequestView`'s
-  `Debug` hides `last_user_text`. `background_kind` (quota probe = `max_tokens == 1`, title =
+  `POST /v1/messages`. `RequestView`'s
+  `Debug` hides `last_user_text`. `src/rewrite.rs` `apply(body, &decision)` applies the decision
+  by splicing raw JSON (`serde_json` `raw_value`; never re-serialize the whole body, the rest must
+  stay byte for byte): `model`, top-level `output_config.effort`, and `output_config.effort` of the
+  latest system message that has one; effort is never added where absent. `Ok(None)` = forward
+  original, `Err` = warn and forward original. The proxy resets `content-length` after a rewrite
+  and the info log line carries `model` (requested), `routed` and `reason`. `background_kind` (quota probe = `max_tokens == 1`, title =
   `output_config.format`) is checked before `decide`; matches skip the router. Compaction is
   deliberately not background. Turn detection (#14) is not built yet.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >

@@ -34,7 +34,7 @@ Options win over the config file, and the config file wins over the built-in def
 At start, it says which config file it used and where it listens. Then one line per request:
 
 ```
-INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=200 ms=638 model=claude-opus-5-5
+INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=200 ms=638 model=claude-opus-5-5 routed=claude-opus-5-5 reason=passthrough
 ```
 
 - `method` and `path`: what Claude Code asked for.
@@ -43,6 +43,10 @@ INFO smart_claude_router::proxy: request method=POST path=/v1/messages status=20
 - `ms`: how long Anthropic took to start answering. The answer itself can keep streaming after
   that.
 - `model`: the model Claude Code asked for, or `-` when the request names none.
+- `routed`: the model the router chose, which is the one Anthropic received. It is `-` when the
+  router was not asked, for example for other paths and for the background requests described
+  in [The router](router.md).
+- `reason`: why the router chose it, or `-` when `routed` is `-`.
 
 With `--log-level debug` it also prints the full settings it is using.
 
