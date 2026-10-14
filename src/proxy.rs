@@ -23,7 +23,10 @@ use axum::{
     Router,
 };
 
-use crate::stream::{Observed, ResponseInfo, Tap};
+use crate::{
+    router::{PassthroughRouter, RequestView, Router as RouteDecider},
+    stream::{Observed, ResponseInfo, Tap},
+};
 
 /// Largest request body accepted. The Messages API itself rejects requests above 32 MB.
 const MAX_REQUEST_BODY: usize = 64 * 1024 * 1024;
@@ -33,6 +36,7 @@ pub struct Proxy {
     client: reqwest::Client,
     upstream: Arc<str>,
     tap: Option<Arc<dyn Tap>>,
+    router: Arc<dyn RouteDecider>,
 }
 
 impl Proxy {
@@ -48,12 +52,20 @@ impl Proxy {
             client,
             upstream: upstream.trim_end_matches('/').into(),
             tap: None,
+            router: Arc::new(PassthroughRouter),
         })
     }
 
     /// Lets `tap` observe every response body as it streams (see [`crate::stream`]).
     pub fn with_tap(mut self, tap: Arc<dyn Tap>) -> Self {
         self.tap = Some(tap);
+        self
+    }
+
+    /// Replaces the default [`PassthroughRouter`]. Decisions are only logged for now: the body is
+    /// forwarded as received.
+    pub fn with_router(mut self, router: Arc<dyn RouteDecider>) -> Self {
+        self.router = router;
         self
     }
 
@@ -74,6 +86,18 @@ impl Proxy {
             .await
             .map_err(|_| ForwardError::Body)?;
         *model = requested_model(&body);
+        if parts.method == Method::POST && parts.uri.path() == "/v1/messages" {
+            if let Some(view) = RequestView::parse(&parts.headers, &body) {
+                let decision = self.router.decide(&view).await;
+                tracing::debug!(
+                    model = %decision.model,
+                    effort = ?decision.effort,
+                    source = ?decision.source,
+                    reason = %decision.reason,
+                    "routing decision"
+                );
+            }
+        }
 
         let mut request = self
             .client
