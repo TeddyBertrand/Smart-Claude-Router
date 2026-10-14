@@ -48,6 +48,9 @@ pub enum DecisionSource {
     Passthrough,
     Rules,
     Classifier,
+    /// The classifier gave no usable answer, so the rules or the default tier decided. The
+    /// reason names the cause.
+    Fallback,
 }
 
 /// Internal requests Claude Code makes on its own, not on behalf of a user turn.
