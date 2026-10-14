@@ -55,6 +55,14 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   turn, ask the router and `remember`), `Reuse` (continuation, stored decision, reason prefixed
   `same turn:`), `Skip` (continuation with nothing stored, e.g. after a restart: forward
   unchanged, never route mid-turn).
+- `src/rules.rs`: `RulesRouter::new(&Config)` (`Router`, source `Rules`). Order: override marker
+  (`!low`/`!medium`/`!high` as a whitespace-separated word of `last_user_text`, last one wins) >
+  first matching `[[rules.rule]]` (all listed conditions must hold; `keywords` any-of, case
+  insensitive; char/message ranges; `images`; `model_contains`) > `default_tier`. Reasons are
+  `override !x` / `rule <name>` / `no rule matched, default tier`, never message text. Config
+  `[rules] enabled` defaults to **false**; `main.rs` installs the router only when true (a
+  no-match decision is `default_tier`, which could upgrade a user on a cheaper model, so it is
+  opt-in). Rules are validated in `Config::validate`.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed

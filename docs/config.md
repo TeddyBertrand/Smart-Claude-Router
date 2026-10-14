@@ -27,17 +27,19 @@ When the proxy starts, it prints which file it used, or says it is using the bui
 | `[tiers.low]` | Haiku, effort `medium` | The cheapest model and effort routing can choose. |
 | `[tiers.medium]` | Sonnet, effort `high` | The middle option. |
 | `[tiers.high]` | Opus, effort `xhigh` | The strongest option. These are Claude Code's own defaults. |
+| `[rules]` | `enabled = false` | Turns the rules router on, and holds your rules. See [the rules router](rules.md). |
 
 Effort can be `low`, `medium`, `high`, `xhigh` or `max`.
 
 ## What the tiers are for
 
-From v0.2.0, the router picks one of the three tiers for each message you send, and Claude Code's
-request is changed to use that tier's model and effort. Today nothing uses the tiers yet: the
-proxy forwards every request unchanged.
+When the rules router is on, it picks one of the three tiers for each message you send, and
+Claude Code's request is changed to use that tier's model and effort. With `enabled = false`,
+the default, nothing uses the tiers and the proxy forwards every request unchanged.
 
-The default tier is `high` because that is what Claude Code already uses. With the default
-settings, routing changes nothing until you, or the routing rules, choose a lower tier.
+The default tier is `high` because that is what Claude Code already uses. When the rules are on
+and none of them matches, the message goes to the default tier, so a message is only lowered by a
+rule or an override marker you chose.
 
 ## Rules
 
