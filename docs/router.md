@@ -36,7 +36,7 @@ stored. Printing it for debugging shows the length of your last message, not the
 - the model to use
 - the effort to use, or none, which means "leave it as Claude Code set it"
 - a short reason, for the logs
-- who decided: passthrough, rules or classifier
+- who decided: passthrough, rules, classifier, or fallback (the classifier had no usable answer)
 
 ## Requests the router skips
 

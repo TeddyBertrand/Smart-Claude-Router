@@ -42,8 +42,9 @@ the defaults (`router = "rules"` and `enabled = false`) nothing uses the tiers a
 forwards every request unchanged.
 
 The default tier is `high` because that is what Claude Code already uses. When the rules are on
-and none of them matches, or when the classifier cannot answer, the message goes to the default
-tier, so a message is only lowered by a rule, an override marker or a classifier answer.
+and none of them matches, the message goes to the default tier, so a message is only lowered by
+a rule, an override marker or a classifier answer. When the classifier cannot answer, the rules
+decide if they are on, and the default tier decides if they are off.
 
 ## Rules
 
