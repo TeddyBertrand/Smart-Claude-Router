@@ -110,7 +110,10 @@ In the `[classifier]` block of [the config file](config.md):
 | `max_chars` | `600` | Most characters of your message the model sees. |
 | `prompt_file` | not set | Your own prompt, replacing the built-in one. |
 
-The default model is a starting point, not a measured choice.
+The default model is a starting point, not a measured choice. On a computer without a GPU,
+the local model measured in [the benchmark](classifier-benchmark.md) needed about 1.5 seconds
+per message, so `timeout_ms = 500` would not be enough there. Raise it, or expect the fallback
+to decide.
 
 ## What it never does
 

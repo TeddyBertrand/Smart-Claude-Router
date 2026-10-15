@@ -91,6 +91,14 @@ page, plus a short "For developers" section at the end (see `docs/stream-tap.md`
   `Classification::parse` (strict; `xhigh`/`max` and confidence outside 0..1 are errors). Bump
   `PROMPT_VERSION` and the file name on any prompt/schema change. Config `[classifier]`
   (`max_chars`, `prompt_file`); #18 adds the backend keys.
+- Classifier benchmark (#21): `cargo run --release --example classifier_bench -- --model <m>`
+  (needs a running Ollama) runs `bench/classifier-prompts.jsonl` (80 labeled synthetic prompts,
+  checked by `tests/bench_dataset.rs`) through the real `condense` + `OllamaClient` path and
+  prints a Markdown report; paste every run into `docs/classifier-benchmark.md` with date and
+  machine. Don't run other heavy work during a run (skews latency). It aborts a model when the
+  connection drops. Measured so far: `llama3.2` on CPU p50 1.5 s, 85% accuracy; the real prompt
+  is ~949 tokens (`estimated_tokens` says ~780). Default model is still an unmeasured
+  placeholder until #50 (Haiku backend) is benchmarked on the same set.
 - `src/config.rs`: `Config::load(Option<&Path>)` → explicit path (must exist) >
   `$XDG_CONFIG_HOME|~/.config/smart-claude-router/config.toml` if present > `Config::default()`.
   Every field defaults; `deny_unknown_fields` everywhere so typos fail loudly. Tiers are parsed

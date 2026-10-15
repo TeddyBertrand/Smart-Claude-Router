@@ -56,6 +56,8 @@ Rust for this.
   instead of rules.
 - [The classifier prompt](docs/classifier-prompt.md): what the local classifier is shown and must
   answer.
+- [The classifier benchmark](docs/classifier-benchmark.md): how fast and accurate local models
+  are as the classifier, with the results of every run.
 - [Dry run](docs/dry-run.md): see what the router would choose before it changes anything.
 - [Running it](docs/run.md): options, logs, stopping.
 - [The config file](docs/config.md): every setting.
