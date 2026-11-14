@@ -66,6 +66,9 @@ struct Args {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
+    /// Line of the case in the dataset file, set by `load`.
+    #[serde(skip)]
+    line: usize,
     text: String,
     expected: Tier,
     /// Repeated `prefix_repeat` times in front of `text`, to build long messages.
@@ -169,7 +172,10 @@ fn load(path: &PathBuf) -> anyhow::Result<Vec<Case>> {
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .map(|(i, line)| {
-            serde_json::from_str(line).with_context(|| format!("{}:{}", path.display(), i + 1))
+            let mut case: Case = serde_json::from_str(line)
+                .with_context(|| format!("{}:{}", path.display(), i + 1))?;
+            case.line = i + 1;
+            Ok(case)
         })
         .collect()
 }
@@ -432,7 +438,7 @@ fn report(
             let shown: String = case.text.chars().take(70).collect();
             println!(
                 "- line {}: expected {}, answered {answer}: {shown}",
-                i + 1,
+                case.line,
                 TIERS[index(case.expected)]
             );
         }
