@@ -52,8 +52,10 @@ long pasted log that ends in "that fixed it, thanks", which is easy.
 The prompt has a version (`v1`). Every change to the prompt or to the answer format gets a new
 version, so benchmark results can be matched to the prompt that produced them.
 
-The prompt is kept under about 900 tokens, because the classifier runs before every new
-message and a long prompt makes it slower. The current prompt is about 780.
+The prompt is kept short, because the classifier runs before every new message and a long
+prompt makes it slower. The check in the code estimates about 780 tokens, against a budget of
+900. A real count is higher: Ollama counted 949 tokens with `qwen3.5:4b` (see
+[the benchmark](classifier-benchmark.md)). The estimate is only a rough guide.
 
 ## Settings
 

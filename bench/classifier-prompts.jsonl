@@ -1,0 +1,80 @@
+{"text":"fix the typo in README: recieve -> receive","expected":"low"}
+{"text":"rename the variable `tmp` to `buffer` in src/proxy.rs","expected":"low","messages":3,"tool_use":true}
+{"text":"run cargo fmt","expected":"low"}
+{"text":"commit this with a good message","expected":"low","messages":18,"tool_use":true}
+{"text":"what port does the proxy listen on by default?","expected":"low"}
+{"text":"add a trailing newline to config.example.toml","expected":"low"}
+{"text":"remove the unused import in main.rs","expected":"low","messages":5,"tool_use":true}
+{"text":"thanks, that works","expected":"low","messages":12,"tool_use":true}
+{"text":"yes","expected":"low","messages":6,"tool_use":true,"note":"bare confirmation of a small step"}
+{"text":"push it","expected":"low","messages":22,"tool_use":true}
+{"text":"change the default timeout from 500 to 800","expected":"low","messages":3,"tool_use":true}
+{"text":"corrige la faute dans le titre du README","expected":"low"}
+{"text":"what does `git rebase --abort` do?","expected":"low"}
+{"text":"make that string a constant","expected":"low","messages":7,"tool_use":true}
+{"text":"add `.env` to .gitignore","expected":"low"}
+{"text":"bump the version to 0.3.1 in Cargo.toml","expected":"low"}
+{"text":"undo that last change","expected":"low","messages":9,"tool_use":true}
+{"text":"show me the diff","expected":"low","messages":14,"tool_use":true}
+{"prefix":"2024-05-01 12:00:01 INFO request handled path=/v1/messages status=200 ms=412\n","prefix_repeat":40,"text":"ok that fixed it, you can commit","expected":"low","messages":14,"tool_use":true,"note":"long paste, trivial ask"}
+{"text":"lowercase the heading in docs/setup.md","expected":"low"}
+{"text":"can you add a blank line between those two functions?","expected":"low","messages":5,"tool_use":true}
+{"text":"what's the difference between `&str` and `String`?","expected":"low"}
+{"text":"supprime la ligne de debug print dans rules.rs","expected":"low","messages":4,"tool_use":true}
+{"text":"translate the comment on line 12 to English","expected":"low","messages":3,"tool_use":true}
+{"text":"ok","expected":"low","messages":30,"tool_use":true}
+{"text":"use single quotes instead of double quotes in that file","expected":"low","messages":3,"tool_use":true}
+{"text":"add a --verbose flag to the CLI that also logs the config path","expected":"medium","messages":3}
+{"text":"explain what src/conversation.rs does and how entries expire","expected":"medium"}
+{"text":"write unit tests for the override_marker function","expected":"medium","messages":3,"tool_use":true}
+{"text":"the /health endpoint returns 500 when the config file is missing, fix it","expected":"medium"}
+{"text":"add a retry with backoff to the upstream request, max 3 attempts","expected":"medium","messages":5,"tool_use":true}
+{"text":"refactor the validate function in config.rs into smaller functions","expected":"medium","messages":3,"tool_use":true}
+{"text":"add a `--version` output that includes the git commit hash","expected":"medium"}
+{"text":"this layout looks broken on mobile, can you fix it?","expected":"medium","messages":2,"images":1}
+{"text":"add a GitHub Action that runs cargo clippy on pull requests","expected":"medium"}
+{"text":"write a README section explaining how to install with Nix","expected":"medium","messages":3,"tool_use":true}
+{"text":"the test `parse_empty_body` fails after my last change, can you fix it?","expected":"medium","messages":4,"tool_use":true}
+{"text":"add pagination to the /items endpoint, 20 per page","expected":"medium"}
+{"text":"parse the `Retry-After` header and wait that long before retrying","expected":"medium","messages":9,"tool_use":true}
+{"text":"convert the callbacks in utils.js to async/await","expected":"medium"}
+{"text":"add a dark mode toggle to the settings page","expected":"medium","messages":3}
+{"text":"implement `Display` for ClassifyError and use it in the logs","expected":"medium","messages":5,"tool_use":true}
+{"text":"ajoute un test pour le cas où le body est vide","expected":"medium","messages":6,"tool_use":true}
+{"text":"write a SQL migration that adds a `deleted_at` column to users","expected":"medium"}
+{"text":"yes, go ahead","expected":"medium","messages":40,"tool_use":true,"note":"ambiguous, depends on the plan just proposed"}
+{"text":"update the docs to mention the new --dry-run flag","expected":"medium","messages":4,"tool_use":true}
+{"text":"the date shows as Invalid Date for users in Safari, fix it","expected":"medium"}
+{"text":"add input validation to the signup form: email format and 8-character password","expected":"medium"}
+{"text":"split src/utils.rs into one module per concern","expected":"medium","messages":3,"tool_use":true}
+{"text":"write a script that backs up the database nightly and keeps 7 copies","expected":"medium"}
+{"text":"ajoute la pagination à la liste des utilisateurs","expected":"medium"}
+{"text":"can you review this function for bugs?","expected":"medium","messages":3,"tool_use":true}
+{"text":"set up eslint with the airbnb config and fix the warnings it reports","expected":"medium"}
+{"text":"make the logger include the request id in every line","expected":"medium","messages":5,"tool_use":true}
+{"text":"why does the server deadlock when two clients reconnect at the same time?","expected":"high","messages":5,"tool_use":true,"note":"short but hard"}
+{"text":"redesign the config system so plugins can add their own sections","expected":"high","messages":7,"tool_use":true}
+{"text":"migrate the whole backend from Express to Fastify without downtime","expected":"high"}
+{"text":"we get random 502s under load, find the root cause","expected":"high","messages":6,"tool_use":true}
+{"text":"design a caching layer for the API that stays consistent with writes","expected":"high"}
+{"text":"audit the auth flow for security vulnerabilities and fix what you find","expected":"high"}
+{"text":"the memory usage grows until the process is OOM-killed after about two days, track it down","expected":"high"}
+{"text":"refactor the monolith into services, starting with billing","expected":"high"}
+{"text":"implement end-to-end encryption for the chat messages, including key rotation","expected":"high"}
+{"text":"make the query faster, the join on orders and items takes 30 seconds","expected":"high","messages":4,"tool_use":true}
+{"text":"why is this race condition only happening in production?","expected":"high","messages":8,"tool_use":true}
+{"text":"rewrite the sync engine so it handles conflicts when two devices edit offline","expected":"high"}
+{"text":"figure out why the build is not reproducible across machines","expected":"high","messages":5,"tool_use":true}
+{"text":"design the plugin system: sandboxing, versioning and an upgrade path","expected":"high"}
+{"text":"pourquoi le serveur se bloque quand deux clients se reconnectent en même temps ?","expected":"high","messages":5,"tool_use":true}
+{"text":"port the code base from Python 2 to Python 3, there are around 300 files","expected":"high"}
+{"text":"I want to add multi-tenancy to the app, figure out the best approach and implement it","expected":"high"}
+{"text":"the tokenizer gives different results on ARM and x86, why?","expected":"high","messages":3,"tool_use":true}
+{"text":"review the whole codebase and propose an architecture that scales to 10x traffic","expected":"high"}
+{"text":"implement a lock-free queue and prove it correct","expected":"high"}
+{"text":"something is wrong with our retry logic, it makes outages worse. analyse it and redesign it","expected":"high","messages":4,"tool_use":true}
+{"text":"concevoir un système de permissions par rôle avec héritage et audit","expected":"high"}
+{"text":"debug this: the app crashes with SIGSEGV only when built with --release","expected":"high","messages":3,"tool_use":true}
+{"text":"add real-time collaboration to the editor, like Google Docs","expected":"high"}
+{"text":"why do our integration tests pass locally and fail on CI roughly one run in five?","expected":"high","messages":6,"tool_use":true}
+{"prefix":"java.sql.SQLTransientConnectionException: pool - Connection is not available, request timed out after 30000ms\n\tat com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)\n","prefix_repeat":12,"text":"find why the connection pool is exhausted and fix it","expected":"high","messages":3,"tool_use":true,"note":"long paste, hard ask"}
